@@ -1,25 +1,7 @@
 [
   {
-    "origin": ["http://localhost:*", "http://localhost:4173", "http://localhost:5173"],
-    "method": ["GET", "HEAD", "DELETE", "PUT", "POST", "OPTIONS"],
-    "responseHeader": ["Content-Type", "x-goog-meta-*"],
+    "origin": ["*"],
+    "method": ["GET", "POST", "PUT", "DELETE"],
     "maxAgeSeconds": 3600
-  [
-    {
-      "origin": [
-        "http://localhost:*",
-        "http://localhost:4173",
-        "http://localhost:5173",
-        "http://127.0.0.1:*"
-      ],
-      "method": ["GET","HEAD","DELETE","PUT","POST","OPTIONS"],
-      "responseHeader": ["Content-Type","x-goog-meta-*","Authorization"],
-      "maxAgeSeconds": 3600
-    },
-    {
-      "origin": ["https://*.web.app","https://*.firebaseapp.com"],
-      "method": ["GET","HEAD","DELETE","PUT","POST","OPTIONS"],
-      "responseHeader": ["Content-Type","x-goog-meta-*","Authorization"],
-      "maxAgeSeconds": 3600
-    }
-  ]
+  }
+]

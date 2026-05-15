@@ -1,9 +1,26 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
-import { addDoc, collection, db, doc, serverTimestamp, storage, uploadBytes, getDownloadURL, setDoc, ref, getDoc, updateDoc } from '../firebase';
+import { addDoc, collection, db, doc, serverTimestamp, setDoc, getDoc, updateDoc } from '../firebase';
 import type { User } from 'firebase/auth';
 import { Trash2, MapPin, Loader2, Navigation, Search } from 'lucide-react';
+
+const CLOUDINARY_CLOUD = 'ds6iydtrj';
+const CLOUDINARY_PRESET = 'chuayganha';
+
+async function uploadToCloudinary(file: File): Promise<string> {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('upload_preset', CLOUDINARY_PRESET);
+
+  const res = await fetch(
+    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`,
+    { method: 'POST', body: formData }
+  );
+  const data = await res.json();
+  if (!data.secure_url) throw new Error('Cloudinary upload failed');
+  return data.secure_url;
+}
 
 const PROVINCES = [
   'กรุงเทพมหานคร','กระบี่','กาญจนบุรี','กาฬสินธุ์','กำแพงเพชร',
@@ -102,14 +119,13 @@ const DEFAULT_FORM = {
 };
 
 export default function ReportFormPage({ user }: ReportFormPageProps) {
-  // รองรับทั้ง /report/lost, /report/found, /report/edit/:id
   const { type, id } = useParams<{ type: string; id: string }>();
   const isEditMode = !!id;
   const navigate = useNavigate();
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState(DEFAULT_FORM);
-  const [existingImages, setExistingImages] = useState<string[]>([]); // รูปเดิมจาก Firestore
+  const [existingImages, setExistingImages] = useState<string[]>([]);
   const [images, setImages] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
@@ -120,13 +136,8 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [addressSearch, setAddressSearch] = useState('');
 
-  const isLost = isEditMode
-    ? form.title !== '' // ใช้ type จาก Firestore
-    : type === 'lost';
-
   const STEPS = ['พื้นฐาน', 'ตำแหน่ง', 'รายละเอียด', 'ติดต่อ'];
 
-  // ── โหลดข้อมูลเดิมถ้าเป็น edit mode ────────────────────────────────────
   useEffect(() => {
     if (!isEditMode || !id) return;
 
@@ -136,7 +147,6 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
         if (!snap.exists()) { alert('ไม่พบโพสต์นี้'); navigate('/profile'); return; }
         const data = snap.data() as any;
 
-        // ตรวจสอบสิทธิ์
         if (user && data.userId !== user.uid) { alert('คุณไม่มีสิทธิ์แก้ไขโพสต์นี้'); navigate('/profile'); return; }
 
         setForm({
@@ -259,32 +269,31 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
     setExistingImages((prev) => prev.filter((_, idx) => idx !== i));
   };
 
-  // ── Submit (create หรือ update) ──────────────────────────────────────────
   const handleSubmit = async () => {
     if (!user) return;
     if (!form.title.trim()) { alert('กรุณากรอกหัวข้อโพสต์'); setStep(0); return; }
+    if (!isEditMode && existingImages.length === 0 && images.length === 0) {
+      alert('กรุณาอัปโหลดรูปภาพอย่างน้อย 1 รูป');
+      setStep(2);
+      return;
+    }
     setSaving(true);
     setMessage('กำลังอัปโหลดรูปภาพ...');
 
     try {
-      // อัปโหลดรูปใหม่
+      // อัปโหลดผ่าน Cloudinary
       const newImageUrls: string[] = [];
       for (let i = 0; i < images.length; i++) {
-        const image = images[i];
-        const storageRef = ref(storage, `reports/${user.uid}/${Date.now()}-${i}-${image.name}`);
-        const snapshot = await uploadBytes(storageRef, image);
-        const url = await getDownloadURL(snapshot.ref);
+        const url = await uploadToCloudinary(images[i]);
         newImageUrls.push(url);
         setUploadProgress(Math.round(((i + 1) / images.length) * 100));
       }
 
-      // รวมรูปเดิม + รูปใหม่
       const allImages = [...existingImages, ...newImageUrls];
 
       setMessage('กำลังบันทึกโพสต์...');
 
       if (isEditMode && id) {
-        // ── UPDATE ──────────────────────────────────────────────────────
         await updateDoc(doc(db, 'reports', id), {
           ...form,
           images: allImages,
@@ -294,7 +303,6 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
         setMessage('✓ แก้ไขสำเร็จ! กำลังกลับไปหน้าโปรไฟล์...');
         setTimeout(() => navigate('/profile'), 1500);
       } else {
-        // ── CREATE ──────────────────────────────────────────────────────
         const docRef = await addDoc(collection(db, 'reports'), {
           userId: user.uid,
           user: { name: user.displayName || user.email || 'ผู้ใช้', avatar: user.photoURL || '' },
@@ -534,17 +542,21 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
           {/* อัปโหลดรูปใหม่ */}
           <div>
             <p className={lbl}>
-              {isEditMode ? 'เพิ่มรูปภาพใหม่' : `รูปภาพ (${images.length}/5)`}
+              {isEditMode ? 'เพิ่มรูปภาพใหม่' : `รูปภาพ (${images.length}/5) *`}
             </p>
             <div onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}
-              className="mt-2 rounded-2xl border-2 border-dashed border-orange-200 bg-orange-50/50 p-6 text-center">
+              className={`mt-2 rounded-2xl border-2 border-dashed p-6 text-center transition ${
+                !isEditMode && images.length === 0
+                  ? 'border-red-300 bg-red-50/50'
+                  : 'border-orange-200 bg-orange-50/50'
+              }`}>
               <p className="text-sm text-slate-500">ลากรูปวางที่นี่ หรือ</p>
               <label className="mt-2 inline-block cursor-pointer rounded-xl bg-orange-500 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-600 transition">
                 เลือกรูปภาพ
                 <input type="file" multiple accept="image/*" className="hidden" onChange={(e) => handleFiles(e.target.files)} />
               </label>
-              <p className="mt-1 text-xs text-slate-400">สูงสุด 5 รูป</p>
+              <p className="mt-1 text-xs text-slate-400">สูงสุด 5 รูป {!isEditMode && '(จำเป็น)'}</p>
             </div>
 
             {uploadProgress > 0 && uploadProgress < 100 && (
