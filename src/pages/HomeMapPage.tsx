@@ -25,6 +25,8 @@ import {
   Grid2X2,
 } from 'lucide-react';
 
+const PLACEHOLDER = 'https://placehold.co/400x300/fff7ed/f97316?text=ไม่มีรูป';
+
 interface HomeMapPageProps {
   user: User | null;
 }
@@ -257,9 +259,12 @@ export default function HomeMapPage({ user }: HomeMapPageProps) {
                 onClick={() => setSelectedReport(report)}
               >
                 <img
-                  src={report.images?.[0]}
+                  src={report.images?.[0] || PLACEHOLDER}
                   alt=""
                   className="h-[190px] w-full object-cover transition duration-500 group-hover:scale-105"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = PLACEHOLDER;
+                  }}
                 />
 
                 {/* TYPE */}
