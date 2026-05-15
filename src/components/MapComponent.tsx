@@ -7,6 +7,7 @@ interface MapComponentProps {
   reports: Report[];
   height?: string;
   zoom?: number;
+  selectedReport?: Report | null;
   onMarkerClick?: (report: Report) => void;
 }
 
@@ -14,6 +15,7 @@ export default function MapComponent({
   reports,
   height = 'h-[500px]',
   zoom = 5,
+  selectedReport,
   onMarkerClick,
 }: MapComponentProps) {
   const mapRef = useRef<L.Map | null>(null);
@@ -127,6 +129,15 @@ export default function MapComponent({
       }
     }
   }, [reports, onMarkerClick]);
+
+  // Pan to selectedReport when it changes
+  useEffect(() => {
+    if (!mapRef.current || !selectedReport?.lat || !selectedReport?.lng) return;
+    mapRef.current.setView([selectedReport.lat, selectedReport.lng], 12, {
+      animate: true,
+      duration: 0.6,
+    });
+  }, [selectedReport]);
 
   return (
     <div className={`${height} relative`}>
