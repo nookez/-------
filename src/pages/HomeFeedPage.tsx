@@ -3,11 +3,11 @@ import { Link } from 'react-router-dom';
 import {
   MapPin, Loader2, Search, Plus, TrendingUp,
   ChevronDown, AlertTriangle, PawPrint, Eye, X,
-  SlidersHorizontal, ArrowUpRight, Filter, Info
+  SlidersHorizontal, ArrowUpRight, Filter, Info, MessageCircle
 } from 'lucide-react';
 import {
   collection, query, orderBy, db, Timestamp, onSnapshot,
-  limit, getDocs, startAfter,
+  limit, getDocs, startAfter, getCountFromServer,
 } from '../firebase';
 import type { User } from 'firebase/auth';
 import { sampleReports } from '../data';
@@ -40,39 +40,44 @@ function mapDoc(d: any): Report & { likedBy?: string[] } {
   };
 }
 
+// ─── Helper: Fetch real comment counts for reports ─────────────────────────
+async function fetchCommentCounts(reportIds: string[]): Promise<Record<string, number>> {
+  const counts: Record<string, number> = {};
+  await Promise.all(
+    reportIds.map(async (id) => {
+      try {
+        const snap = await getCountFromServer(collection(db, 'reports', id, 'comments'));
+        counts[id] = snap.data().count ?? 0;
+      } catch { counts[id] = 0; }
+    })
+  );
+  return counts;
+}
+
 // ─── Color constants (Minimal Orange/White palette) ─────────────────────────
 const ORANGE = {
-  50: '#fff7ed',
-  100: '#ffedd5',
-  200: '#fed7aa',
-  400: '#fb923c',
-  500: '#f97316',
-  600: '#ea580c',
+  50: '#fff7ed', 100: '#ffedd5', 200: '#fed7aa',
+  400: '#fb923c', 500: '#f97316', 600: '#ea580c',
 };
 
 const SLATE = {
-  50: '#f8fafc',
-  100: '#f1f5f9',
-  200: '#e2e8f0',
-  400: '#94a3b8',
-  500: '#64748b',
-  600: '#475569',
-  700: '#334155',
-  800: '#1e293b',
-  900: '#0f172a',
+  50: '#f8fafc', 100: '#f1f5f9', 200: '#e2e8f0',
+  400: '#94a3b8', 500: '#64748b', 600: '#475569',
+  700: '#334155', 800: '#1e293b', 900: '#0f172a',
 };
 
 // ─── Sub-Components ─────────────────────────────────────────────────────────
 
-// 🎴 Minimalist Card Component
-const AnimalCard = ({ report }: { report: Report & { likedBy?: string[] } }) => {
+// 🎴 Minimalist Card Component (with Subtle Comment Button)
+const AnimalCard = ({ report }: { report: Report & { likedBy?: string[]; realCommentCount?: number } }) => {
   const hasImage = report.images?.[0];
   const isLost = report.type === 'lost';
+  const commentCount = report.realCommentCount ?? report.commentsCount ?? 0;
   
   return (
     <Link 
       to={`/detail/${report.id}`}
-      className="group relative flex flex-col rounded-2xl bg-white border border-slate-200 overflow-hidden shadow-sm hover:shadow-lg transition-all duration-300"
+      className="group relative flex flex-col rounded-2xl bg-white border border-slate-200 overflow-hidden shadow-sm hover:shadow-lg hover:border-orange-200/50 transition-all duration-300"
     >
       {/* Image Section */}
       <div className="relative h-40 bg-slate-50 overflow-hidden">
@@ -82,6 +87,7 @@ const AnimalCard = ({ report }: { report: Report & { likedBy?: string[] } }) => 
             alt={report.title}
             className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500"
             loading="lazy"
+            onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/400x300/f8fafc/cbd5e1?text=No+Image'; }}
           />
         ) : (
           <div className="h-full w-full flex items-center justify-center">
@@ -92,9 +98,7 @@ const AnimalCard = ({ report }: { report: Report & { likedBy?: string[] } }) => 
         {/* Status Badge - Top Left */}
         <div className="absolute top-3 left-3">
           <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold shadow-sm ${
-            isLost 
-              ? 'bg-white text-slate-700 border border-slate-200' 
-              : 'bg-white text-slate-700 border border-slate-200'
+            isLost ? 'bg-white text-slate-700 border border-slate-200' : 'bg-white text-slate-700 border border-slate-200'
           }`}>
             <span className={`h-2 w-2 rounded-full ${isLost ? 'bg-orange-500' : 'bg-slate-400'}`} />
             {isLost ? 'สัตว์หาย' : 'พบสัตว์'}
@@ -141,29 +145,47 @@ const AnimalCard = ({ report }: { report: Report & { likedBy?: string[] } }) => 
         {/* Divider */}
         <div className="my-auto border-t border-slate-100" />
 
-        {/* Footer */}
+        {/* Footer with Stats + Subtle Comment Button */}
         <div className="flex items-center justify-between pt-1">
           <span className="text-[10px] text-slate-400" title="เวลาที่รายงานถูกสร้างขึ้น">
             {timeAgo(report.createdAt)}
           </span>
           
-          <div className="flex items-center gap-4 text-[10px] text-slate-400">
-            <span className="flex items-center gap-1" title="จำนวนครั้งที่เปิดดู">
+          <div className="flex items-center gap-3">
+            {/* Views */}
+            <span className="flex items-center gap-1 text-[10px] text-slate-400" title="จำนวนครั้งที่เปิดดู">
               <Eye className="h-3 w-3" />
               {report.viewsCount || 0}
             </span>
-            <span className="flex items-center gap-1" title="จำนวนการกดถูกใจ">
+            
+            {/* Likes */}
+            <span className="flex items-center gap-1 text-[10px] text-slate-400" title="จำนวนการกดถูกใจ">
               <TrendingUp className="h-3 w-3" />
               {report.likesCount || 0}
             </span>
+            
+            {/* 💬 Subtle Comment Button - Only shows interaction on hover */}
+            <button
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                window.location.href = `/detail/${report.id}#comments`;
+              }}
+              className="flex items-center gap-1 text-[10px] text-slate-300 hover:text-orange-500 transition-colors cursor-pointer"
+              title="แสดงความคิดเห็น"
+              aria-label={`แสดงความคิดเห็น ${commentCount} รายการ`}
+            >
+              <MessageCircle className="h-3 w-3 group-hover:text-orange-500 transition-colors" />
+              <span className="group-hover:text-orange-500 transition-colors">{commentCount}</span>
+            </button>
           </div>
         </div>
       </div>
 
-      {/* Hover Indicator */}
-      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-2 group-hover:translate-x-0">
+      {/* Hover Indicator - Subtle */}
+      <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-2 group-hover:translate-x-0 pointer-events-none">
         <div className="rounded-full bg-white p-1.5 shadow-md border border-slate-100">
-          <ArrowUpRight className="h-3.5 w-3.5 text-slate-400 -rotate-45" />
+          <ArrowUpRight className="h-3.5 w-3.5 text-slate-300 group-hover:text-orange-400 transition-colors -rotate-45" />
         </div>
       </div>
     </Link>
@@ -172,15 +194,9 @@ const AnimalCard = ({ report }: { report: Report & { likedBy?: string[] } }) => 
 
 // 🔍 Minimalist Search Bar
 const SearchBar = ({ 
-  value, 
-  onChange, 
-  onClear,
-  placeholder 
+  value, onChange, onClear, placeholder 
 }: { 
-  value: string; 
-  onChange: (v: string) => void; 
-  onClear: () => void;
-  placeholder?: string;
+  value: string; onChange: (v: string) => void; onClear: () => void; placeholder?: string;
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   
@@ -212,15 +228,9 @@ const SearchBar = ({
 
 // 🎛️ Filter Chip - Minimalist
 const FilterChip = ({ 
-  active, 
-  onClick, 
-  children,
-  title 
+  active, onClick, children, title 
 }: { 
-  active: boolean; 
-  onClick: () => void; 
-  children: React.ReactNode;
-  title?: string;
+  active: boolean; onClick: () => void; children: React.ReactNode; title?: string;
 }) => (
   <button
     onClick={onClick}
@@ -237,33 +247,16 @@ const FilterChip = ({
 
 // ─── Section Header Component ──────────────────────────────────────────────
 const SectionHeader = ({ 
-  title, 
-  subtitle, 
-  count, 
-  isLost,
-  onViewAll 
+  title, subtitle, count, isLost, onViewAll 
 }: { 
-  title: string; 
-  subtitle?: string;
-  count: number;
-  isLost: boolean;
-  onViewAll?: () => void;
+  title: string; subtitle?: string; count: number; isLost: boolean; onViewAll?: () => void;
 }) => (
   <div className="mb-5 pb-4 border-b border-slate-100">
     <div className="flex items-start justify-between">
       <div className="flex items-center gap-3">
-        {/* Section Icon */}
-        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-          isLost ? 'bg-orange-50' : 'bg-slate-50'
-        }`}>
-          {isLost ? (
-            <Search className="h-4.5 w-4.5 text-orange-500" />
-          ) : (
-            <Eye className="h-4.5 w-4.5 text-slate-400" />
-          )}
+        <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${isLost ? 'bg-orange-50' : 'bg-slate-50'}`}>
+          {isLost ? <Search className="h-4.5 w-4.5 text-orange-500" /> : <Eye className="h-4.5 w-4.5 text-slate-400" />}
         </div>
-        
-        {/* Text */}
         <div>
           <div className="flex items-center gap-2">
             <h2 className="text-base font-semibold text-slate-800">{title}</h2>
@@ -278,12 +271,8 @@ const SectionHeader = ({
           </p>
         </div>
       </div>
-      
       {onViewAll && count > 5 && (
-        <button 
-          onClick={onViewAll} 
-          className="text-sm font-medium text-orange-500 hover:text-orange-600 transition-colors"
-        >
+        <button onClick={onViewAll} className="text-sm font-medium text-orange-500 hover:text-orange-600 transition-colors">
           ดูทั้งหมด
         </button>
       )}
@@ -294,7 +283,7 @@ const SectionHeader = ({
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 export default function HomeFeedPage({ user }: HomeFeedPageProps) {
-  const [reports, setReports] = useState<(Report & { likedBy?: string[] })[]>([]);
+  const [reports, setReports] = useState<(Report & { likedBy?: string[]; realCommentCount?: number })[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [lastVisible, setLastVisible] = useState<any>(null);
@@ -308,12 +297,19 @@ export default function HomeFeedPage({ user }: HomeFeedPageProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const PAGE_SIZE = 20;
 
-  // ── realtime first page ──────────────────────────────────────────────────
+  // ── realtime first page with comment counts ─────────────────────────────
   useEffect(() => {
     setLoading(true);
     const q = query(collection(db, 'reports'), orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
-    const unsub = onSnapshot(q, (snap) => {
-      const data = snap.docs.map(mapDoc);
+    const unsub = onSnapshot(q, async (snap) => {
+      let data = snap.docs.map(mapDoc);
+      
+      // Fetch real comment counts for these reports
+      if (data.length > 0) {
+        const counts = await fetchCommentCounts(data.map(r => r.id));
+        data = data.map(r => ({ ...r, realCommentCount: counts[r.id] }));
+      }
+      
       setReports(data.length > 0 ? data : (sampleReports as any));
       setLastVisible(snap.docs[snap.docs.length - 1] ?? null);
       setHasMore(snap.docs.length >= PAGE_SIZE);
@@ -326,14 +322,21 @@ export default function HomeFeedPage({ user }: HomeFeedPageProps) {
     return () => unsub();
   }, []);
 
-  // ── load more ────────────────────────────────────────────────────────────
+  // ── load more with comment counts ────────────────────────────────────────
   const loadMore = async () => {
     if (!lastVisible || !hasMore || loadingMore) return;
     setLoadingMore(true);
     try {
       const q = query(collection(db, 'reports'), orderBy('createdAt', 'desc'), startAfter(lastVisible), limit(PAGE_SIZE));
       const snap = await getDocs(q);
-      const more = snap.docs.map(mapDoc);
+      let more = snap.docs.map(mapDoc);
+      
+      // Fetch real comment counts for new reports
+      if (more.length > 0) {
+        const counts = await fetchCommentCounts(more.map(r => r.id));
+        more = more.map(r => ({ ...r, realCommentCount: counts[r.id] }));
+      }
+      
       if (more.length > 0) {
         setReports((prev) => {
           const ids = new Set(prev.map((r) => r.id));
@@ -341,7 +344,9 @@ export default function HomeFeedPage({ user }: HomeFeedPageProps) {
         });
         setLastVisible(snap.docs[snap.docs.length - 1] ?? null);
         setHasMore(more.length >= PAGE_SIZE);
-      } else setHasMore(false);
+      } else {
+        setHasMore(false);
+      }
     } catch (err) { console.warn('loadMore error', err); }
     setLoadingMore(false);
   };
@@ -464,16 +469,13 @@ export default function HomeFeedPage({ user }: HomeFeedPageProps) {
           {/* Expandable Filters Panel */}
           {showFilters && (
             <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-4">
-              
               {/* Type Filter */}
               <div>
                 <p className="text-xs font-medium text-slate-500 mb-2">ประเภทรายงาน</p>
                 <div className="flex gap-2">
                   {(['ทั้งหมด', 'lost', 'found'] as const).map((t) => (
                     <FilterChip 
-                      key={t} 
-                      active={typeFilter === t} 
-                      onClick={() => setTypeFilter(t)}
+                      key={t} active={typeFilter === t} onClick={() => setTypeFilter(t)}
                       title={t === 'ทั้งหมด' ? 'แสดงทุกประเภท' : t === 'lost' ? 'เฉพาะสัตว์ที่หาย' : 'เฉพาะสัตว์ที่พบ'}
                     >
                       {t === 'ทั้งหมด' ? 'ทั้งหมด' : t === 'lost' ? 'สัตว์หาย' : 'พบสัตว์'}
@@ -488,9 +490,7 @@ export default function HomeFeedPage({ user }: HomeFeedPageProps) {
                 <div className="flex gap-2">
                   {(['ล่าสุด', 'ด่วน', 'ยอดนิยม'] as const).map((s) => (
                     <FilterChip 
-                      key={s} 
-                      active={sort === s} 
-                      onClick={() => setSort(s)}
+                      key={s} active={sort === s} onClick={() => setSort(s)}
                       title={s === 'ล่าสุด' ? 'รายงานใหม่สุดก่อน' : s === 'ด่วน' ? 'รายงานที่ต้องการความช่วยเหลือเร่งด่วน' : 'รายงานที่ได้รับการตอบรับมากที่สุด'}
                     >
                       {s}
@@ -505,11 +505,7 @@ export default function HomeFeedPage({ user }: HomeFeedPageProps) {
                   <p className="text-xs font-medium text-slate-500 mb-2">สายพันธุ์</p>
                   <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                     {speciesList.map((sp) => (
-                      <FilterChip 
-                        key={sp} 
-                        active={speciesFilter === sp} 
-                        onClick={() => setSpeciesFilter(sp)}
-                      >
+                      <FilterChip key={sp} active={speciesFilter === sp} onClick={() => setSpeciesFilter(sp)}>
                         {sp}
                       </FilterChip>
                     ))}
@@ -520,10 +516,7 @@ export default function HomeFeedPage({ user }: HomeFeedPageProps) {
               {/* Clear Filters */}
               {activeFilterCount > 0 && (
                 <div className="pt-2 border-t border-slate-200">
-                  <button 
-                    onClick={clearAll} 
-                    className="text-xs font-medium text-slate-400 hover:text-orange-600 transition-colors"
-                  >
+                  <button onClick={clearAll} className="text-xs font-medium text-slate-400 hover:text-orange-600 transition-colors">
                     ล้างตัวกรองทั้งหมด
                   </button>
                 </div>
@@ -544,7 +537,6 @@ export default function HomeFeedPage({ user }: HomeFeedPageProps) {
       <main className="mx-auto max-w-6xl px-4 sm:px-6 py-6">
         
         {loading ? (
-          // Loading State
           <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-slate-200 bg-white p-12">
             <div className="relative">
               <div className="h-12 w-12 rounded-xl bg-orange-50 animate-pulse" />
@@ -555,96 +547,55 @@ export default function HomeFeedPage({ user }: HomeFeedPageProps) {
               <div className="h-2 w-20 rounded-full bg-slate-50 animate-pulse" />
             </div>
           </div>
-
         ) : filtered.length === 0 ? (
-          // Empty State
           <div className="flex flex-col items-center justify-center rounded-2xl border border-slate-200 bg-white p-12 text-center">
             <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-slate-50">
               <PawPrint className="h-7 w-7 text-slate-300" />
             </div>
             <h3 className="text-base font-medium text-slate-700">ไม่พบรายการ</h3>
             <p className="mt-1 text-sm text-slate-400 max-w-xs">
-              {search 
-                ? `ไม่พบผลลัพธ์ที่ตรงกับ "${search}"` 
-                : 'ยังไม่มีรายงานในขณะนี้'
-              }
+              {search ? `ไม่พบผลลัพธ์ที่ตรงกับ "${search}"` : 'ยังไม่มีรายงานในขณะนี้'}
             </p>
             {(activeFilterCount > 0 || search) && (
-              <button 
-                onClick={clearAll} 
-                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-orange-50 px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-100 transition-colors"
-              >
+              <button onClick={clearAll} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-orange-50 px-4 py-2 text-sm font-medium text-orange-600 hover:bg-orange-100 transition-colors">
                 ล้างตัวกรอง
               </button>
             )}
           </div>
-
         ) : typeFilter === 'ทั้งหมด' ? (
           /* ── Two-section layout ── */
           <div className="space-y-10">
-            
-            {/* Lost Section */}
             {lostFiltered.length > 0 && (
               <section>
-                <SectionHeader 
-                  title="สัตว์หาย" 
-                  subtitle="รายงานสัตว์เลี้ยงที่เจ้าของกำลังตามหา"
-                  count={lostFiltered.length}
-                  isLost={true}
-                  onViewAll={() => setTypeFilter('lost')}
-                />
+                <SectionHeader title="สัตว์หาย" subtitle="รายงานสัตว์เลี้ยงที่เจ้าของกำลังตามหา" count={lostFiltered.length} isLost={true} onViewAll={() => setTypeFilter('lost')} />
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                   {lostFiltered.slice(0, 10).map((r) => <AnimalCard key={r.id} report={r} />)}
                 </div>
               </section>
             )}
-
-            {/* Found Section */}
             {foundFiltered.length > 0 && (
               <section>
-                <SectionHeader 
-                  title="พบสัตว์" 
-                  subtitle="รายงานสัตว์เลี้ยงที่พบและรอเจ้าของมารับ"
-                  count={foundFiltered.length}
-                  isLost={false}
-                  onViewAll={() => setTypeFilter('found')}
-                />
+                <SectionHeader title="พบสัตว์" subtitle="รายงานสัตว์เลี้ยงที่พบและรอเจ้าของมารับ" count={foundFiltered.length} isLost={false} onViewAll={() => setTypeFilter('found')} />
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                   {foundFiltered.slice(0, 10).map((r) => <AnimalCard key={r.id} report={r} />)}
                 </div>
               </section>
             )}
           </div>
-
         ) : (
           /* ── Filtered single-type view ── */
           <div className="space-y-5">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center gap-3">
-                <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-                  typeFilter === 'lost' ? 'bg-orange-50' : 'bg-slate-50'
-                }`}>
-                  {typeFilter === 'lost' ? (
-                    <Search className="h-4.5 w-4.5 text-orange-500" />
-                  ) : (
-                    <Eye className="h-4.5 w-4.5 text-slate-400" />
-                  )}
+                <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${typeFilter === 'lost' ? 'bg-orange-50' : 'bg-slate-50'}`}>
+                  {typeFilter === 'lost' ? <Search className="h-4.5 w-4.5 text-orange-500" /> : <Eye className="h-4.5 w-4.5 text-slate-400" />}
                 </div>
                 <div>
-                  <h2 className="text-base font-semibold text-slate-800">
-                    {typeFilter === 'lost' ? 'สัตว์หาย' : 'พบสัตว์'}
-                  </h2>
-                  <p className="text-xs text-slate-400">
-                    {filtered.length} รายการ
-                  </p>
+                  <h2 className="text-base font-semibold text-slate-800">{typeFilter === 'lost' ? 'สัตว์หาย' : 'พบสัตว์'}</h2>
+                  <p className="text-xs text-slate-400">{filtered.length} รายการ</p>
                 </div>
               </div>
-              <button 
-                onClick={() => setTypeFilter('ทั้งหมด')} 
-                className="text-sm font-medium text-slate-400 hover:text-slate-600 transition-colors"
-              >
-                ← กลับ
-              </button>
+              <button onClick={() => setTypeFilter('ทั้งหมด')} className="text-sm font-medium text-slate-400 hover:text-slate-600 transition-colors">← กลับ</button>
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
@@ -658,10 +609,7 @@ export default function HomeFeedPage({ user }: HomeFeedPageProps) {
                   disabled={loadingMore}
                   className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-medium text-slate-600 hover:border-orange-300 hover:text-orange-600 disabled:opacity-50 transition-colors"
                 >
-                  {loadingMore
-                    ? <><Loader2 className="h-4 w-4 animate-spin" /> กำลังโหลด...</>
-                    : <><ChevronDown className="h-4 w-4" /> โหลดเพิ่มเติม</>
-                  }
+                  {loadingMore ? <><Loader2 className="h-4 w-4 animate-spin" /> กำลังโหลด...</> : <><ChevronDown className="h-4 w-4" /> โหลดเพิ่มเติม</>}
                 </button>
               </div>
             )}

@@ -3,7 +3,6 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, auth } from './firebase';
 import type { User } from 'firebase/auth';
-import AppShell from './components/AppShell';
 import ProtectedRoute from './components/ProtectedRoute';
 import LandingPage from './pages/LandingPage';
 import AuthPage from './pages/AuthPage';
@@ -11,6 +10,7 @@ import HomeFeedPage from './pages/HomeFeedPage';
 import HomeMapPage from './pages/HomeMapPage';
 import ReportFormPage from './pages/ReportFormPage';
 import ProfilePage from './pages/ProfilePage';
+import AppShell from './components/AppShell';
 import DetailPage from './pages/DetailPage';
 
 function App() {

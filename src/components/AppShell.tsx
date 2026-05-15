@@ -12,22 +12,27 @@ export default function AppShell({ user }: AppShellProps) {
     { label: 'หน้าแรก', to: '/', icon: Home },
     { label: 'แผนที่', to: '/map', icon: Map },
     { label: 'ฟีด', to: '/feed', icon: Search },
-    { label: 'แจ้งของ', to: '/report/lost', icon: PlusCircle },
+    { label: 'แจ้งเหตุ', to: '/report/lost', icon: PlusCircle },
     { label: 'โปรไฟล์', to: '/profile', icon: UserIcon },
   ];
 
   return (
     <header className="sticky top-0 z-40 border-b border-white/80 bg-white/80 backdrop-blur-xl shadow-sm">
       <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8">
+        
+        {/* ✅ ส่วนโลโก้ที่แก้ไขแล้ว */}
         <Link to="/" className="flex items-center gap-3 text-sm font-semibold text-slate-900">
-          <div className="flex h-12 w-12 items-center justify-center rounded-3xl bg-gradient-to-br from-orange-400 to-orange-200 text-white shadow-glass">
-            ช.
-          </div>
-          <div>
-            <div className="text-lg font-bold">ช่วยกันหา</div>
-            <div className="text-xs text-slate-500">ชุมชนช่วยตามของหาย</div>
+          <img 
+            src="/logocja.png" 
+            alt="ช่วยกันหา" 
+            className="h-10 w-auto object-contain drop-shadow-sm" 
+          />
+          <div className="leading-tight">
+            <div className="text-lg font-bold text-slate-800">ช่วยกันหา</div>
+            <div className="text-[11px] text-slate-500">ชุมชนช่วยตามสัตว์เลี้ยงหาย</div>
           </div>
         </Link>
+
         <div className="hidden items-center gap-4 md:flex">
           <Link to="/map" className="rounded-3xl border border-orange-100 bg-orange-50 px-4 py-2 text-sm text-orange-700 transition hover:bg-orange-100">แผนที่</Link>
           <Link to="/feed" className="rounded-3xl border border-orange-100 bg-orange-50 px-4 py-2 text-sm text-orange-700 transition hover:bg-orange-100">โพสต์ล่าสุด</Link>
@@ -38,6 +43,7 @@ export default function AppShell({ user }: AppShellProps) {
           )}
         </div>
       </div>
+
       <nav className="fixed bottom-0 left-0 right-0 z-50 block md:hidden bg-white/90 border-t border-slate-200 backdrop-blur-xl">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-3">
           {navItems.map((item) => {

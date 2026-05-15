@@ -17,11 +17,21 @@ async function uploadToCloudinary(file: File): Promise<string> {
   const fd = new FormData();
   fd.append('file', file);
   fd.append('upload_preset', CLOUDINARY_PRESET);
+  
   const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD}/image/upload`, {
-    method: 'POST', body: fd,
+    method: 'POST', 
+    body: fd,
   });
+  
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Cloudinary upload failed: ${res.status} - ${errorText}`);
+  }
+  
   const data = await res.json();
-  if (!data.secure_url) throw new Error('Cloudinary upload failed');
+  if (!data.secure_url) {
+    throw new Error('Cloudinary upload failed: No secure_url in response');
+  }
   return data.secure_url;
 }
 
@@ -34,7 +44,9 @@ async function geocodeAddress(text: string): Promise<{ lat: number; lng: number 
     );
     const data = await res.json();
     if (data[0]) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-  } catch {}
+  } catch (err) {
+    console.error('Geocode error:', err);
+  }
   return null;
 }
 
@@ -51,7 +63,9 @@ async function reverseGeocode(lat: number, lng: number) {
       district: addr.county || addr.city_district || addr.suburb || '',
       address: data.display_name || '',
     };
-  } catch {}
+  } catch (err) {
+    console.error('Reverse geocode error:', err);
+  }
   return null;
 }
 
@@ -102,7 +116,6 @@ const PROVINCES = [
   'อุทัยธานี','อุบลราชธานี',
 ];
 
-// ประเภทสัตว์ที่รองรับ
 const PET_TYPES = [
   { value: 'Dog', label: '🐕 สุนัข' },
   { value: 'Cat', label: '🐈 แมว' },
@@ -111,7 +124,6 @@ const PET_TYPES = [
   { value: 'Other', label: '🐾 อื่น ๆ' },
 ] as const;
 
-// สีขนที่พบบ่อย
 const COLORS = ['ขาว','ดำ','น้ำตาล','ส้ม','เหลือง','เทา','ลาย','ขาว-ดำ','ขาว-ส้ม','น้ำตาล-ขาว','อื่น ๆ'];
 
 const DEFAULT_FORM = {
@@ -124,7 +136,6 @@ const DEFAULT_FORM = {
   address: '',
   lat: 13.7563,
   lng: 100.5018,
-  // pet-specific
   petType: 'Dog',
   breed: '',
   color: '',
@@ -137,11 +148,8 @@ const DEFAULT_FORM = {
   sterilized: 'ไม่ทราบ',
   microchip: '',
   note: '',
-  // compensation
   compensationAmount: '',
   compensationType: 'เงินสด',
-  urgent: false,
-  // contact
   contactPhone: '',
   contactLine: '',
   contactFacebook: '',
@@ -169,7 +177,7 @@ function ToggleGroup<T extends string>({
   options, value, onChange, cols = 3,
 }: { options: { value: T; label: string }[]; value: T; onChange: (v: T) => void; cols?: number }) {
   return (
-    <div className={`mt-2 grid gap-2`} style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+    <div className="mt-2 grid gap-2" style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
       {options.map((opt) => (
         <button
           key={opt.value}
@@ -208,6 +216,7 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
   const [addressSearch, setAddressSearch] = useState('');
 
   const STEPS = ['สัตว์', 'ตำแหน่ง', 'รูปภาพ', 'ติดต่อ'];
+  const geocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Load edit data ─────────────────────────────────────────────────────────
   useEffect(() => {
@@ -215,9 +224,17 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
     async function load() {
       try {
         const snap = await getDoc(doc(db, 'reports', id!));
-        if (!snap.exists()) { alert('ไม่พบโพสต์'); navigate('/profile'); return; }
+        if (!snap.exists()) { 
+          alert('ไม่พบโพสต์'); 
+          navigate('/profile'); 
+          return; 
+        }
         const d = snap.data() as any;
-        if (user && d.userId !== user.uid) { alert('ไม่มีสิทธิ์แก้ไข'); navigate('/profile'); return; }
+        if (user && d.userId !== user.uid) { 
+          alert('ไม่มีสิทธิ์แก้ไข'); 
+          navigate('/profile'); 
+          return; 
+        }
         setForm({
           title: d.title || '',
           description: d.description || '',
@@ -242,20 +259,22 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
           note: d.note || '',
           compensationAmount: d.compensationAmount ? String(d.compensationAmount) : '',
           compensationType: d.compensationType || 'เงินสด',
-          urgent: d.urgent || false,
           contactPhone: d.contactPhone || '',
           contactLine: d.contactLine || '',
           contactFacebook: d.contactFacebook || '',
         });
         setExistingImages(d.images || []);
-      } catch { alert('โหลดข้อมูลไม่สำเร็จ'); }
-      finally { setLoadingData(false); }
+      } catch (err) { 
+        console.error('Load error:', err);
+        alert('โหลดข้อมูลไม่สำเร็จ'); 
+      } finally { 
+        setLoadingData(false); 
+      }
     }
     load();
   }, [id, isEditMode, user, navigate]);
 
-  // ── setField ───────────────────────────────────────────────────────────────
-  const geocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ── Geocode trigger ────────────────────────────────────────────────────────
   const triggerGeocode = useCallback((province: string, district: string) => {
     if (geocodeTimer.current) clearTimeout(geocodeTimer.current);
     geocodeTimer.current = setTimeout(async () => {
@@ -315,7 +334,11 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
         }));
         setGpsLoading(false);
       },
-      () => { alert('ไม่สามารถรับ GPS ได้'); setGpsLoading(false); },
+      (err) => { 
+        console.error('GPS error:', err);
+        alert('ไม่สามารถรับตำแหน่งได้ กรุณาอนุญาตการเข้าถึงตำแหน่ง'); 
+        setGpsLoading(false); 
+      },
       { enableHighAccuracy: true, timeout: 10000 }
     );
   };
@@ -327,21 +350,57 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
     setPreviews(all.map((f) => URL.createObjectURL(f)));
   };
 
+  // ── Validation ─────────────────────────────────────────────────────────────
+  const validateStep = (stepNum: number): boolean => {
+    if (stepNum === 0) {
+      if (!form.title.trim()) { alert('กรุณากรอกหัวข้อโพสต์'); return false; }
+      if (!form.date) { alert('กรุณาเลือกวันที่'); return false; }
+    }
+    if (stepNum === 1) {
+      if (!form.province) { alert('กรุณาเลือกจังหวัด'); return false; }
+      if (!form.lat || !form.lng) { alert('กรุณาระบุตำแหน่งบนแผนที่'); return false; }
+    }
+    if (stepNum === 2 && !isEditMode) {
+      if (existingImages.length === 0 && images.length === 0) {
+        alert('กรุณาอัปโหลดรูปภาพอย่างน้อย 1 รูป');
+        return false;
+      }
+    }
+    return true;
+  };
+
   // ── Submit ─────────────────────────────────────────────────────────────────
   const handleSubmit = async () => {
-    if (!user) return;
-    if (!form.title.trim()) { alert('กรุณากรอกหัวข้อโพสต์'); setStep(0); return; }
-    if (!isEditMode && existingImages.length === 0 && images.length === 0) {
-      alert('กรุณาอัปโหลดรูปภาพอย่างน้อย 1 รูป'); setStep(2); return;
+    if (!user) {
+      alert('กรุณาเข้าสู่ระบบก่อนสร้างโพสต์');
+      return;
     }
+
+    // Validate all steps before submit
+    for (let i = 0; i < 3; i++) {
+      if (!validateStep(i)) {
+        setStep(i);
+        return;
+      }
+    }
+
     setSaving(true);
     setMessage('กำลังอัปโหลดรูปภาพ...');
+
     try {
+      // Upload new images
       const newUrls: string[] = [];
       for (let i = 0; i < images.length; i++) {
-        newUrls.push(await uploadToCloudinary(images[i]));
-        setUploadProgress(Math.round(((i + 1) / images.length) * 100));
+        try {
+          const url = await uploadToCloudinary(images[i]);
+          newUrls.push(url);
+          setUploadProgress(Math.round(((i + 1) / images.length) * 100));
+        } catch (uploadErr: any) {
+          console.error(`Upload image ${i} failed:`, uploadErr);
+          throw new Error(`อัปโหลดรูปภาพที่ ${i + 1} ไม่สำเร็จ: ${uploadErr.message}`);
+        }
       }
+
       const allImages = [...existingImages, ...newUrls];
       const compensation = form.compensationAmount
         ? `${Number(form.compensationAmount).toLocaleString('th-TH')} บาท (${form.compensationType})`
@@ -356,46 +415,67 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
         compensation,
         compensationAmount: Number(form.compensationAmount) || 0,
         images: allImages,
-        tags: [
-          'สัตว์เลี้ยง',
-          form.petType, effectiveColor, form.breed,
-          form.gender, form.size, form.note,
-        ].filter(Boolean),
+        tags: ['สัตว์เลี้ยง', form.petType, effectiveColor, form.breed, form.gender, form.size, form.note].filter(Boolean),
       };
 
       setMessage('กำลังบันทึกโพสต์...');
+
       if (isEditMode && id) {
-        await updateDoc(doc(db, 'reports', id), { ...payload, updatedAt: serverTimestamp() });
+        // Edit mode
+        await updateDoc(doc(db, 'reports', id), { 
+          ...payload, 
+          updatedAt: serverTimestamp(),
+        });
         setMessage('✓ แก้ไขสำเร็จ');
+        setSaving(false);
         setTimeout(() => navigate('/profile'), 1200);
       } else {
+        // Create mode
         const docRef = await addDoc(collection(db, 'reports'), {
           userId: user.uid,
-          user: { name: user.displayName || user.email || 'ผู้ใช้', avatar: user.photoURL || '' },
+          user: { 
+            name: user.displayName || user.email?.split('@')[0] || 'ผู้ใช้', 
+            avatar: user.photoURL || '' 
+          },
           type: type === 'lost' ? 'lost' : 'found',
           ...payload,
           status: type === 'lost' ? 'กำลังตาม' : 'พบแล้ว',
           resolved: false,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
-          likesCount: 0, commentsCount: 0, sharesCount: 0, viewsCount: 0,
+          likesCount: 0,
+          commentsCount: 0,
+          sharesCount: 0,
+          viewsCount: 0,
           likedBy: [],
         });
+
         await setDoc(doc(db, 'users', user.uid), { lastReportId: docRef.id }, { merge: true });
         setMessage('✓ บันทึกสำเร็จ กำลังไปหน้าฟีด...');
+        setSaving(false);
         setTimeout(() => navigate('/feed'), 1200);
       }
-    } catch {
-      setMessage('เกิดข้อผิดพลาด กรุณาลองใหม่');
+    } catch (err: any) {
+      console.error('Submit error:', err);
+      setMessage(`❌ ${err.message || 'เกิดข้อผิดพลาด กรุณาลองใหม่'}`);
       setSaving(false);
+    } finally {
+      setUploadProgress(0);
     }
-    setUploadProgress(0);
+  };
+
+  const handleNext = () => {
+    if (validateStep(step)) {
+      setStep((s) => Math.min(s + 1, 3));
+    }
   };
 
   const canNext = useMemo(() => {
     if (step === 0) return form.title.trim().length > 0 && !!form.date;
+    if (step === 1) return !!form.province && form.lat !== 0 && form.lng !== 0;
+    if (step === 2 && !isEditMode) return existingImages.length + images.length > 0;
     return true;
-  }, [step, form.title, form.date]);
+  }, [step, form.title, form.date, form.province, form.lat, form.lng, existingImages.length, images.length, isEditMode]);
 
   const inp = 'w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 transition';
   const lbl = 'text-sm font-semibold text-slate-700';
@@ -452,40 +532,17 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
       {step === 0 && (
         <div className="rounded-3xl bg-white p-6 shadow-glass space-y-6">
 
-          {/* หัวข้อ + ด่วน */}
-          <div className="grid gap-5 sm:grid-cols-[1fr_auto]">
-            <div>
-              <label className={lbl}>หัวข้อโพสต์ <span className="text-red-400">*</span></label>
-              <input
-                value={form.title}
-                onChange={(e) => setField('title', e.target.value)}
-                className={`mt-2 ${inp}`}
-                maxLength={80}
-              />
-              <p className="mt-1 text-right text-[11px] text-slate-300">{form.title.length}/80</p>
-            </div>
-            <div>
-              <label className={lbl}>ด่วน?</label>
-              <div className="mt-2 flex flex-col gap-2">
-                {[
-                  { v: false, label: '⚪ ปกติ' },
-                  { v: true, label: '🔴 ด่วน' },
-                ].map(({ v, label }) => (
-                  <button
-                    key={label}
-                    type="button"
-                    onClick={() => setField('urgent', v)}
-                    className={`rounded-2xl border px-4 py-2 text-sm font-bold transition ${
-                      form.urgent === v
-                        ? 'border-orange-400 bg-orange-50 text-orange-700'
-                        : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-orange-200'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
+          {/* หัวข้อ */}
+          <div>
+            <label className={lbl}>หัวข้อโพสต์ <span className="text-red-400">*</span></label>
+            <input
+              value={form.title}
+              onChange={(e) => setField('title', e.target.value)}
+              className={`mt-2 ${inp}`}
+              maxLength={80}
+              placeholder="เช่น น้องหมาพันธุ์ปอมเมอเรเนียนหายแถวสยาม"
+            />
+            <p className="mt-1 text-right text-[11px] text-slate-300">{form.title.length}/80</p>
           </div>
 
           {/* วันที่ + เวลา */}
@@ -551,14 +608,14 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
           <div className="grid gap-5 sm:grid-cols-2">
             <div>
               <label className={lbl}>สายพันธุ์</label>
-              <input value={form.breed} onChange={(e) => setField('breed', e.target.value)} className={`mt-2 ${inp}`} />
+              <input value={form.breed} onChange={(e) => setField('breed', e.target.value)} className={`mt-2 ${inp}`} placeholder="เช่น ปอมเมอเรเนียน, ชิห์สุ" />
             </div>
             <div>
               <label className={lbl}>ขนาดตัว</label>
               <div className="relative mt-2">
                 <select value={form.size} onChange={(e) => setField('size', e.target.value)} className={sel}>
                   <option value="">ไม่ระบุ</option>
-                  {['เล็กมาก (< 5 กก.)','เล็ก (5-10 กก.)','กลาง (10-20 กก.)','ใหญ่ (20-35 กก.)','ใหญ่มาก (> 35 กก.)'].map((s) => (
+                  {['เล็กมาก (&lt; 5 กก.)','เล็ก (5-10 กก.)','กลาง (10-20 กก.)','ใหญ่ (20-35 กก.)','ใหญ่มาก (&gt; 35 กก.)'].map((s) => (
                     <option key={s}>{s}</option>
                   ))}
                 </select>
@@ -573,7 +630,7 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
             <div className="relative mt-2">
               <select value={form.age} onChange={(e) => setField('age', e.target.value)} className={sel}>
                 <option value="">ไม่ทราบ</option>
-                {['< 1 ปี','1-3 ปี','3-5 ปี','5-8 ปี','> 8 ปี'].map((a) => <option key={a}>{a}</option>)}
+                {['&lt; 1 ปี','1-3 ปี','3-5 ปี','5-8 ปี','&gt; 8 ปี'].map((a) => <option key={a}>{a}</option>)}
               </select>
               <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             </div>
@@ -603,6 +660,7 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
                 value={form.colorCustom}
                 onChange={(e) => setField('colorCustom', e.target.value)}
                 className={`mt-2 ${inp}`}
+                placeholder="ระบุสี..."
               />
             )}
           </div>
@@ -625,6 +683,7 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
                 value={form.collarDetail}
                 onChange={(e) => setField('collarDetail', e.target.value)}
                 className={`mt-2 ${inp}`}
+                placeholder="เช่น สีแดง มีกระดิ่ง"
               />
             )}
           </div>
@@ -632,7 +691,7 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
           {/* Microchip */}
           <div>
             <label className={lbl}>เลข Microchip (ถ้ามี)</label>
-            <input value={form.microchip} onChange={(e) => setField('microchip', e.target.value)} className={`mt-2 ${inp}`} />
+            <input value={form.microchip} onChange={(e) => setField('microchip', e.target.value)} className={`mt-2 ${inp}`} placeholder="เช่น 982000123456789" />
           </div>
 
           {/* จุดสังเกต */}
@@ -644,6 +703,7 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
               rows={3}
               className={`mt-2 ${inp} resize-none`}
               maxLength={400}
+              placeholder="เช่น มีจุดดำที่หูซ้าย, เดินกะเผลก, สวมปลอกคอสีส้ม"
             />
             <p className="mt-1 text-right text-[11px] text-slate-300">{form.note.length}/400</p>
           </div>
@@ -657,6 +717,7 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
               rows={3}
               className={`mt-2 ${inp} resize-none`}
               maxLength={500}
+              placeholder="เล่าเพิ่มเติมเกี่ยวกับสัตว์เลี้ยงหรือเหตุการณ์..."
             />
             <p className="mt-1 text-right text-[11px] text-slate-300">{form.description.length}/500</p>
           </div>
@@ -710,11 +771,11 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
             </div>
             <div>
               <label className={lbl}>อำเภอ / เขต</label>
-              <input value={form.district} onChange={(e) => setField('district', e.target.value)} className={`mt-2 ${inp}`} />
+              <input value={form.district} onChange={(e) => setField('district', e.target.value)} className={`mt-2 ${inp}`} placeholder="เช่น ปทุมวัน, บางรัก" />
             </div>
             <div className="sm:col-span-2">
               <label className={lbl}>ที่อยู่โดยละเอียด</label>
-              <input value={form.address} onChange={(e) => setField('address', e.target.value)} className={`mt-2 ${inp}`} />
+              <input value={form.address} onChange={(e) => setField('address', e.target.value)} className={`mt-2 ${inp}`} placeholder="เช่น หน้าห้างสยามพารากอน, ซอยสุขุมวิท 21" />
             </div>
           </div>
 
@@ -726,6 +787,7 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
                 onChange={(e) => setAddressSearch(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddressSearch()}
                 className={`${inp} pl-10`}
+                placeholder="ค้นหาสถานที่..."
               />
             </div>
             <button type="button" onClick={handleAddressSearch} disabled={geocoding}
@@ -776,6 +838,7 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
                     <button
                       onClick={() => setExistingImages((prev) => prev.filter((_, idx) => idx !== i))}
                       className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition group-hover:opacity-100 rounded-xl"
+                      title="ลบรูปภาพ"
                     >
                       <Trash2 className="h-4 w-4 text-white" />
                     </button>
@@ -829,6 +892,7 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
                         setPreviews((p) => p.filter((_, idx) => idx !== i));
                       }}
                       className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 transition group-hover:opacity-100 rounded-xl"
+                      title="ลบรูปภาพ"
                     >
                       <Trash2 className="h-4 w-4 text-white" />
                     </button>
@@ -847,15 +911,15 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
           <div className="grid gap-5 sm:grid-cols-2">
             <div>
               <label className={lbl}>เบอร์โทรศัพท์</label>
-              <input type="tel" value={form.contactPhone} onChange={(e) => setField('contactPhone', e.target.value)} className={`mt-2 ${inp}`} />
+              <input type="tel" value={form.contactPhone} onChange={(e) => setField('contactPhone', e.target.value)} className={`mt-2 ${inp}`} placeholder="เช่น 0812345678" />
             </div>
             <div>
               <label className={lbl}>Line ID</label>
-              <input value={form.contactLine} onChange={(e) => setField('contactLine', e.target.value)} className={`mt-2 ${inp}`} />
+              <input value={form.contactLine} onChange={(e) => setField('contactLine', e.target.value)} className={`mt-2 ${inp}`} placeholder="เช่น @petrescue" />
             </div>
             <div className="sm:col-span-2">
               <label className={lbl}>Facebook</label>
-              <input value={form.contactFacebook} onChange={(e) => setField('contactFacebook', e.target.value)} className={`mt-2 ${inp}`} />
+              <input value={form.contactFacebook} onChange={(e) => setField('contactFacebook', e.target.value)} className={`mt-2 ${inp}`} placeholder="เช่น https://facebook.com/username" />
             </div>
           </div>
 
@@ -874,7 +938,6 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
             {form.compensationAmount && (
               <Row label="ค่าตอบแทน" value={`฿${Number(form.compensationAmount).toLocaleString('th-TH')} (${form.compensationType})`} />
             )}
-            {form.urgent && <p className="font-bold text-red-600">🔴 โพสต์ด่วน</p>}
           </div>
 
           {message && (
@@ -897,7 +960,7 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
         </div>
         <div>
           {step < 3 ? (
-            <button onClick={() => setStep((s) => s + 1)} disabled={!canNext}
+            <button onClick={handleNext} disabled={!canNext}
               className="rounded-2xl bg-orange-500 px-7 py-3 text-sm font-bold text-white shadow-sm hover:bg-orange-600 disabled:opacity-40 transition">
               ถัดไป →
             </button>
