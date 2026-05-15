@@ -49,16 +49,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-// Use Storage emulator in development to avoid CORS / billing issues
-if (import.meta.env.DEV) {
-  try {
-    connectStorageEmulator(storage, 'localhost', 9199);
-    // eslint-disable-next-line no-console
-    console.info('Connected to Storage emulator at localhost:9199');
-  } catch (e) {
-    // ignore if emulator not available
-  }
-}
+
 
 export {
   app,
