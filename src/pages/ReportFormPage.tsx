@@ -91,21 +91,47 @@ async function geocodeAddress(text: string): Promise<{ lat: number; lng: number 
   return null;
 }
 
+// ── แก้ไข: reverseGeocode ที่ดีขึ้น ──────────────────────────────────────
 async function reverseGeocode(lat: number, lng: number): Promise<{ province: string; district: string; address: string } | null> {
   try {
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+      `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&accept-language=th`,
       { headers: { 'Accept-Language': 'th' } }
     );
     const data = await res.json();
     const addr = data.address || {};
+
+    const rawProvince = addr.state || addr.province || addr.region || '';
+    const province = rawProvince
+      .replace('จังหวัด', '')
+      .replace('Province', '')
+      .trim();
+
+    const district =
+      addr.city_district ||
+      addr.suburb ||
+      addr.county ||
+      addr.city ||
+      addr.town ||
+      '';
+
     return {
-      province: addr.state?.replace('จังหวัด', '') || '',
-      district: addr.city_district || addr.suburb || addr.county || '',
+      province,
+      district,
       address: data.display_name || '',
     };
   } catch {}
   return null;
+}
+
+// ── แก้ไข: match จังหวัดให้แม่นขึ้น ─────────────────────────────────────
+function matchProvince(raw: string): string | undefined {
+  if (!raw) return undefined;
+  return PROVINCES.find((p) =>
+    raw.includes(p) ||
+    p.includes(raw) ||
+    raw.replace(/\s/g, '').includes(p.replace(/\s/g, ''))
+  );
 }
 
 const DEFAULT_FORM = {
@@ -223,7 +249,7 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
     if (result) {
       setForm((f) => ({
         ...f, lat, lng,
-        province: PROVINCES.find((p) => result.province.includes(p) || p.includes(result.province)) || f.province,
+        province: matchProvince(result.province) || f.province,
         district: result.district || f.district,
       }));
     }
@@ -241,7 +267,7 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
         if (result) {
           setForm((f) => ({
             ...f, lat, lng,
-            province: PROVINCES.find((p) => result.province.includes(p) || p.includes(result.province)) || f.province,
+            province: matchProvince(result.province) || f.province,
             district: result.district || f.district,
             address: result.address || f.address,
           }));
@@ -281,7 +307,6 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
     setMessage('กำลังอัปโหลดรูปภาพ...');
 
     try {
-      // อัปโหลดผ่าน Cloudinary
       const newImageUrls: string[] = [];
       for (let i = 0; i < images.length; i++) {
         const url = await uploadToCloudinary(images[i]);
@@ -348,7 +373,6 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
   return (
     <div className="space-y-6 pb-8">
 
-      {/* ── Header ─────────────────────────────────────────────────────── */}
       <div className="rounded-2xl bg-white p-6 shadow-glass sm:p-8">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -377,7 +401,6 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
         </div>
       </div>
 
-      {/* ── Step 0: พื้นฐาน ─────────────────────────────────────────────── */}
       {step === 0 && (
         <div className="rounded-2xl bg-white p-6 shadow-glass sm:p-8">
           <div className="grid gap-5 sm:grid-cols-2">
@@ -415,7 +438,6 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
         </div>
       )}
 
-      {/* ── Step 1: ตำแหน่ง ─────────────────────────────────────────────── */}
       {step === 1 && (
         <div className="rounded-2xl bg-white p-6 shadow-glass sm:p-8 space-y-5">
           <div className="grid gap-5 sm:grid-cols-2">
@@ -475,7 +497,6 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
         </div>
       )}
 
-      {/* ── Step 2: รายละเอียด ───────────────────────────────────────────── */}
       {step === 2 && (
         <div className="rounded-2xl bg-white p-6 shadow-glass sm:p-8 space-y-6">
           <div className="grid gap-5 sm:grid-cols-2">
@@ -520,7 +541,6 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
             )}
           </div>
 
-          {/* รูปเดิม (edit mode) */}
           {isEditMode && existingImages.length > 0 && (
             <div>
               <p className={`${lbl} mb-2`}>รูปภาพปัจจุบัน</p>
@@ -539,7 +559,6 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
             </div>
           )}
 
-          {/* อัปโหลดรูปใหม่ */}
           <div>
             <p className={lbl}>
               {isEditMode ? 'เพิ่มรูปภาพใหม่' : `รูปภาพ (${images.length}/5) *`}
@@ -585,7 +604,6 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
         </div>
       )}
 
-      {/* ── Step 3: ติดต่อ ───────────────────────────────────────────────── */}
       {step === 3 && (
         <div className="rounded-2xl bg-white p-6 shadow-glass sm:p-8 space-y-5">
           <div className="grid gap-5 sm:grid-cols-2">
@@ -627,7 +645,6 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
         </div>
       )}
 
-      {/* ── Navigation ──────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between gap-3">
         <div>
           {step > 0 && (
