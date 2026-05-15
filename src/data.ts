@@ -1,0 +1,102 @@
+import type { Report } from './types';
+
+export const categories = [
+  { label: 'สัตว์เลี้ยง', value: 'สัตว์เลี้ยง', icon: 'paw' },
+  { label: 'เอกสาร', value: 'เอกสาร', icon: 'file-text' },
+  { label: 'โทรศัพท์', value: 'โทรศัพท์', icon: 'smartphone' },
+  { label: 'กระเป๋า', value: 'กระเป๋า', icon: 'bag' },
+  { label: 'กุญแจ', value: 'กุญแจ', icon: 'key' },
+  { label: 'อื่น ๆ', value: 'อื่น ๆ', icon: 'more-horizontal' },
+];
+
+export const faqs = [
+  {
+    question: 'ฉันจะเริ่มแจ้งของหายได้อย่างไร?',
+    answer: 'กดปุ่ม แจ้งของหาย หรือ แจ้งพบของ แล้วกรอกข้อมูลให้ครบถ้วนพร้อมรูปภาพเพื่อเพิ่มโอกาสเจอของเร็วขึ้น',
+  },
+  {
+    question: 'ต้องลงทะเบียนก่อนใช้งานหรือไม่?',
+    answer: 'ใช่ ระบบต้องใช้บัญชีเพื่อจัดการโพสต์ บันทึก และติดตามสถานะได้อย่างปลอดภัย',
+  },
+  {
+    question: 'ถ้าพบของแล้วจะติดต่อยังไง?',
+    answer: 'ดูข้อมูลติดต่อในโพสต์ แล้วกดปุ่ม ติดต่อเจ้าของ เพื่อติดต่อผู้แจ้งได้ทันที',
+  },
+];
+
+export const popularTags = ['ด่วน', 'สัตว์เลี้ยง', 'เอกสาร', 'กระเป๋า', 'โทรศัพท์', 'ใกล้ฉัน'];
+
+export const sampleReports: Report[] = [
+  {
+    id: 'r1',
+    type: 'lost',
+    category: 'สัตว์เลี้ยง',
+    title: 'แมวหายจากหมู่บ้านเชียงใหม่',
+    description: 'แมวสีส้มอ้วน ขนยาว ใส่ปลอกคอสีฟ้า หายออกจากบ้านช่วงเย็น',
+    images: ['https://images.unsplash.com/photo-1518791841217-8f162f1e1131?auto=format&fit=crop&w=900&q=80'],
+    province: 'เชียงใหม่',
+    district: 'เมือง',
+    address: 'หมู่บ้านสวนดอก',
+    lat: 18.7877,
+    lng: 98.9931,
+    date: '2026-05-12',
+    time: '18:30',
+    color: 'ส้ม',
+    brand: 'ไม่ระบุ',
+    model: 'แมวบ้าน',
+    breed: 'แมวไทย',
+    size: 'กลาง',
+    tags: ['ด่วน', 'สัตว์เลี้ยง'],
+    reward: '500 บาท',
+    urgent: true,
+    status: 'กำลังตาม',
+    contactPhone: '0987654321',
+    contactFacebook: 'เฟซบุ๊กแมวหาย',
+    contactLine: 'catlover',
+    createdAt: '2026-05-12T18:30:00.000Z',
+    likesCount: 72,
+    commentsCount: 18,
+    sharesCount: 4,
+    viewsCount: 1180,
+    user: {
+      name: 'ปุ๊กกี้',
+      avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80',
+    },
+  },
+  {
+    id: 'r2',
+    type: 'found',
+    category: 'โทรศัพท์',
+    title: 'พบโทรศัพท์ iPhone 14 สีดำ',
+    description: 'เจอโทรศัพท์บนรถไฟฟ้า BTS ใกล้สถานีอโศก พร้อมเคสสีดำ',
+    images: ['https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=900&q=80'],
+    province: 'กรุงเทพมหานคร',
+    district: 'วัฒนา',
+    address: 'สถานีรถไฟฟ้าอโศก',
+    lat: 13.7373,
+    lng: 100.5607,
+    date: '2026-05-14',
+    time: '09:20',
+    color: 'ดำ',
+    brand: 'Apple',
+    model: 'iPhone 14',
+    breed: '',
+    size: 'กลาง',
+    tags: ['โทรศัพท์', 'ใกล้ BTS'],
+    reward: 'ไม่แจ้ง',
+    urgent: false,
+    status: 'พบแล้ว',
+    contactPhone: '0812345678',
+    contactFacebook: 'เจอของดี',
+    contactLine: 'foundbyme',
+    createdAt: '2026-05-14T09:20:00.000Z',
+    likesCount: 45,
+    commentsCount: 10,
+    sharesCount: 1,
+    viewsCount: 920,
+    user: {
+      name: 'นัท',
+      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=200&q=80',
+    },
+  },
+];
