@@ -2,18 +2,23 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   auth, signOut, db, collection, query, where, orderBy, limit,
-  getDocs, getCountFromServer, doc, deleteDoc, Timestamp
+  getDocs, getCountFromServer, doc, deleteDoc, updateDoc, Timestamp
 } from '../firebase';
 import type { User } from 'firebase/auth';
 import type { Report } from '../types';
 import {
   Loader2, LogOut, MapPin, Clock3, Heart, MessageCircle,
-  Eye, Plus, PackageOpen, Trash2, Pencil
+  Eye, Plus, PackageOpen, Trash2, Pencil, CheckCircle2, Sparkles
 } from 'lucide-react';
 
 interface ProfilePageProps {
   user: User | null;
 }
+
+// ─── Type Extension: เพิ่มฟิลด์สถานะชั่วคราว ───────────────────────────────
+type ReportWithStatus = Report & {
+  status?: 'active' | 'resolved' | 'closed';
+};
 
 const PLACEHOLDER = 'https://placehold.co/400x300/f8fafc/cbd5e1?text=No+Image';
 
@@ -28,7 +33,7 @@ function timeAgo(dateString: string): string {
   } catch { return '—'; }
 }
 
-function mapReport(d: any): Report {
+function mapReport(d: any): ReportWithStatus {
   const data = d.data();
   return {
     id: d.id, ...data,
@@ -38,6 +43,7 @@ function mapReport(d: any): Report {
     likesCount: typeof data.likesCount === 'number' ? data.likesCount : 0,
     commentsCount: typeof data.commentsCount === 'number' ? data.commentsCount : 0,
     viewsCount: typeof data.viewsCount === 'number' ? data.viewsCount : 0,
+    status: data.status ?? 'active',
   };
 }
 
@@ -58,12 +64,12 @@ export default function ProfilePage({ user }: ProfilePageProps) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [loggingOut, setLoggingOut] = useState(false);
-  const [myReports, setMyReports] = useState<Report[]>([]);
+  const [myReports, setMyReports] = useState<ReportWithStatus[]>([]);
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [markingFoundId, setMarkingFoundId] = useState<string | null>(null);
 
   useEffect(() => {
-    // ✅ แก้ TS Error: ดึงค่า user.uid เก็บไว้ก่อนเรียก async function
     if (!user) {
       setLoading(false);
       return;
@@ -74,7 +80,6 @@ export default function ProfilePage({ user }: ProfilePageProps) {
     async function loadMyPosts() {
       try {
         setLoading(true);
-        // หมายเหตุ: หากใน DB ใช้ฟิลด์ 'ownerId' แทน 'userId' ให้เปลี่ยนบรรทัดล่างเป็น where('ownerId', '==', currentUid)
         const q = query(
           collection(db, 'reports'),
           where('userId', '==', currentUid),
@@ -86,7 +91,6 @@ export default function ProfilePage({ user }: ProfilePageProps) {
         
         setMyReports(reports);
         
-        // ดึงจำนวนคอมเมนต์จริงจาก sub-collection แบบขนาน
         if (reports.length > 0) {
           const realCounts = await fetchRealCommentCounts(reports.map(r => r.id));
           setCommentCounts(realCounts);
@@ -110,6 +114,31 @@ export default function ProfilePage({ user }: ProfilePageProps) {
       console.error('Logout failed:', err);
     } finally {
       setLoggingOut(false);
+    }
+  }
+
+  // 🎯 Handle marking a lost pet report as FOUND (owner confirmation)
+  async function handleMarkAsFound(reportId: string) {
+    if (!confirm('ยืนยันว่าพบสัตว์เลี้ยงนี้แล้วใช่ไหม?\n\nโพสต์นี้จะถูกทำเครื่องหมายว่า "พบแล้ว" และแสดงบนแผนที่')) return;
+    
+    try {
+      setMarkingFoundId(reportId);
+      
+      await updateDoc(doc(db, 'reports', reportId), {
+        status: 'resolved',
+        updatedAt: Timestamp.now(),
+      });
+      
+      setMyReports(prev => prev.map(r => 
+        r.id === reportId ? { ...r, status: 'resolved' } : r
+      ));
+      
+      alert('✅ อัปเดตสำเร็จ! โพสต์นี้แสดงเป็น "พบแล้ว" บนแผนที่แล้ว');
+    } catch (err) {
+      console.error('Mark as found failed:', err);
+      alert('❌ อัปเดตไม่สำเร็จ กรุณาลองใหม่');
+    } finally {
+      setMarkingFoundId(null);
     }
   }
 
@@ -149,11 +178,12 @@ export default function ProfilePage({ user }: ProfilePageProps) {
 
   const displayName = user.displayName || user.email?.split('@')[0] || 'สมาชิก';
   const totalLikes = myReports.reduce((sum, r) => sum + (r.likesCount || 0), 0);
+  const resolvedCount = myReports.filter(r => r.status === 'resolved').length;
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 space-y-6">
       
-      {/* ── Profile Header (No Avatar) ── */}
+      {/* ── Profile Header ── */}
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="space-y-1">
@@ -169,6 +199,10 @@ export default function ProfilePage({ user }: ProfilePageProps) {
               <div className="rounded-xl border border-rose-100 bg-rose-50 px-4 py-2">
                 <p className="text-xs font-medium text-rose-600">ถูกใจรวม</p>
                 <p className="text-xl font-bold text-rose-700">{totalLikes}</p>
+              </div>
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-2">
+                <p className="text-xs font-medium text-emerald-600">พบแล้ว</p>
+                <p className="text-xl font-bold text-emerald-700">{resolvedCount}</p>
               </div>
             </div>
           </div>
@@ -216,78 +250,128 @@ export default function ProfilePage({ user }: ProfilePageProps) {
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {myReports.map((report) => (
-              <article key={report.id} className="group overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition hover:shadow-md hover:border-orange-200">
-                {/* Image */}
-                <Link to={`/detail/${report.id}`} className="relative block overflow-hidden">
-                  <img
-                    src={report.images?.[0] || PLACEHOLDER}
-                    alt={report.title}
-                    className="h-48 w-full object-cover transition duration-300 group-hover:scale-105"
-                    loading="lazy"
-                    onError={(e) => { (e.target as HTMLImageElement).src = PLACEHOLDER; }}
-                  />
-                  <div className={`absolute left-3 top-3 rounded-lg px-2.5 py-1 text-xs font-semibold shadow-sm backdrop-blur-sm ${
-                    report.type === 'lost' ? 'bg-red-500/90 text-white' : 'bg-emerald-500/90 text-white'
-                  }`}>
-                    {report.type === 'lost' ? 'สัตว์หาย' : 'พบสัตว์'}
-                  </div>
-                  {report.urgent && (
-                    <div className="absolute right-3 top-3 rounded-lg bg-yellow-400/90 px-2 py-1 text-xs font-bold text-black shadow-sm backdrop-blur-sm animate-pulse">
-                      ด่วน
+            {myReports.map((report) => {
+              const isResolved = report.status === 'resolved';
+              const isLostType = report.type === 'lost';
+              
+              return (
+                <article 
+                  key={report.id} 
+                  className={`group overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:shadow-md ${
+                    isResolved 
+                      ? 'border-emerald-300 ring-1 ring-emerald-100' 
+                      : 'border-slate-200 hover:border-orange-200'
+                  }`}
+                >
+                  {/* Image */}
+                  <Link to={`/detail/${report.id}`} className="relative block overflow-hidden">
+                    <img
+                      src={report.images?.[0] || PLACEHOLDER}
+                      alt={report.title}
+                      className={`h-48 w-full object-cover transition duration-300 ${
+                        isResolved ? 'opacity-80' : 'group-hover:scale-105'
+                      }`}
+                      loading="lazy"
+                      onError={(e) => { (e.target as HTMLImageElement).src = PLACEHOLDER; }}
+                    />
+                    
+                    {/* Status Badge */}
+                    <div className={`absolute left-3 top-3 rounded-lg px-2.5 py-1 text-xs font-semibold shadow-sm backdrop-blur-sm ${
+                      isResolved 
+                        ? 'bg-emerald-500/90 text-white' 
+                        : report.type === 'lost' 
+                          ? 'bg-red-500/90 text-white' 
+                          : 'bg-emerald-500/90 text-white'
+                    }`}>
+                      {isResolved ? '✅ พบแล้ว' : report.type === 'lost' ? 'สัตว์หาย' : 'พบสัตว์'}
                     </div>
-                  )}
-                </Link>
+                    
+                    {/* Resolved Overlay */}
+                    {isResolved && (
+                      <div className="absolute inset-0 bg-emerald-500/10 flex items-center justify-center pointer-events-none">
+                        <CheckCircle2 className="h-16 w-16 text-emerald-500/50" />
+                      </div>
+                    )}
+                  </Link>
 
-                {/* Content */}
-                <div className="p-5 space-y-3">
-                  <div>
-                    <h3 className="font-semibold text-slate-900 line-clamp-1 group-hover:text-orange-600 transition">
-                      {report.title}
-                    </h3>
-                    <p className="mt-1 text-sm text-slate-500 line-clamp-2 leading-relaxed">
-                      {report.description || 'ไม่มีรายละเอียดเพิ่มเติม'}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-                      <MapPin size={12} /> {report.province || 'ไม่ระบุ'}
-                    </span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-                      <Clock3 size={12} /> {timeAgo(report.createdAt)}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                    <div className="flex items-center gap-4 text-xs text-slate-500">
-                      <span className="flex items-center gap-1"><Heart size={14} /> {report.likesCount || 0}</span>
-                      {/* ✅ ใช้จำนวนคอมเมนต์จริงจาก Firestore */}
-                      <span className="flex items-center gap-1"><MessageCircle size={14} /> {commentCounts[report.id] ?? 0}</span>
-                      <span className="flex items-center gap-1"><Eye size={14} /> {report.viewsCount || 0}</span>
+                  {/* Content */}
+                  <div className="p-5 space-y-3">
+                    <div>
+                      <h3 className={`font-semibold line-clamp-1 transition ${
+                        isResolved ? 'text-slate-500' : 'text-slate-900 group-hover:text-orange-600'
+                      }`}>
+                        {report.title}
+                      </h3>
+                      <p className={`mt-1 text-sm line-clamp-2 leading-relaxed ${
+                        isResolved ? 'text-slate-400' : 'text-slate-500'
+                      }`}>
+                        {report.description || 'ไม่มีรายละเอียดเพิ่มเติม'}
+                      </p>
                     </div>
 
-                    <div className="flex items-center gap-1">
-                      <Link
-                        to={`/report/edit/${report.id}`}
-                        className="p-2 rounded-lg text-slate-400 hover:text-orange-500 hover:bg-orange-50 transition"
-                        title="แก้ไขโพสต์"
-                      >
-                        <Pencil size={16} />
-                      </Link>
-                      <button
-                        onClick={() => handleDelete(report.id)}
-                        disabled={deletingId === report.id}
-                        className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition disabled:opacity-50"
-                        title="ลบโพสต์"
-                      >
-                        {deletingId === report.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                      </button>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                        <MapPin size={12} /> {report.province || 'ไม่ระบุ'}
+                      </span>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+                        <Clock3 size={12} /> {timeAgo(report.createdAt)}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-3 border-t border-slate-100">
+                      <div className="flex items-center gap-4 text-xs text-slate-500">
+                        <span className="flex items-center gap-1"><Heart size={14} /> {report.likesCount || 0}</span>
+                        <span className="flex items-center gap-1"><MessageCircle size={14} /> {commentCounts[report.id] ?? 0}</span>
+                        <span className="flex items-center gap-1"><Eye size={14} /> {report.viewsCount || 0}</span>
+                      </div>
+
+                      {/* ── Action Buttons Group ── */}
+                      <div className="flex items-center gap-2">
+                        
+                        {/* ✅ PROMINENT "Mark as Found" Button */}
+                        {isLostType && !isResolved && (
+                          <button
+                            onClick={() => handleMarkAsFound(report.id)}
+                            disabled={markingFoundId === report.id}
+                            className="group relative inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-green-500 px-3 py-2 text-xs font-bold text-white shadow-md shadow-emerald-500/25 transition-all hover:shadow-emerald-500/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100"
+                            title="ยืนยันว่าพบสัตว์แล้ว"
+                          >
+                            {/* ✨ Sparkle animation */}
+                            <Sparkles className="absolute -top-1 -right-1 h-3 w-3 text-yellow-300 animate-pulse" />
+                            
+                            {/* Icon + Text */}
+                            {markingFoundId === report.id 
+                              ? <Loader2 size={14} className="animate-spin" /> 
+                              : <CheckCircle2 size={14} className="transition-transform group-hover:scale-110" />
+                            }
+                            <span className="hidden sm:inline">พบแล้ว</span>
+                          </button>
+                        )}
+                        
+                        {/* Edit Button (subtle) */}
+                        <Link
+                          to={`/report/edit/${report.id}`}
+                          className="p-2 rounded-lg text-slate-400 hover:text-orange-500 hover:bg-orange-50 transition"
+                          title="แก้ไขโพสต์"
+                        >
+                          <Pencil size={16} />
+                        </Link>
+                        
+                        {/* Delete Button (subtle) */}
+                        <button
+                          onClick={() => handleDelete(report.id)}
+                          disabled={deletingId === report.id}
+                          className="p-2 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition disabled:opacity-50"
+                          title="ลบโพสต์"
+                        >
+                          {deletingId === report.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </article>
-            ))}
+                </article>
+              );
+            })}
           </div>
         )}
       </section>
