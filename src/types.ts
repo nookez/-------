@@ -36,7 +36,14 @@ export interface Report {
     avatar: string;
   };
 }
-
+export interface Comment {
+  id: string;
+  userId: string;
+  userName: string;
+  userAvatar?: string;
+  text: string;
+  createdAt: string;
+}
 export interface UserProfile {
   uid: string;
   username: string;

@@ -3,28 +3,50 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { Report } from '../types';
 
+interface Coords {
+  lat: number;
+  lng: number;
+}
+
 interface MapComponentProps {
   reports: Report[];
   height?: string;
   zoom?: number;
   selectedReport?: Report | null;
+  userCoords?: Coords | null; // ✅ เพิ่ม
   onMarkerClick?: (report: Report) => void;
 }
+
+const PLACEHOLDER =
+  'https://placehold.co/400x300/fff7ed/f97316?text=🐾+ไม่มีรูป&font=noto';
 
 export default function MapComponent({
   reports,
   height = 'h-[500px]',
   zoom = 5,
   selectedReport,
+  userCoords,
   onMarkerClick,
 }: MapComponentProps) {
   const mapRef = useRef<L.Map | null>(null);
+
+  // ✅ เก็บ markers
   const markersRef = useRef<L.Marker[]>([]);
 
+  // ✅ marker ตำแหน่งผู้ใช้
+  const userMarkerRef = useRef<L.Marker | null>(null);
+
+  // ✅ unique map id กันชนกันหลายหน้า
+  const mapId = useRef(`map-${Math.random().toString(36).slice(2, 11)}`);
+
+  // ─────────────────────────────────────────────
+  // INIT MAP
+  // ─────────────────────────────────────────────
   useEffect(() => {
-    // Initialize map with Thailand center
     if (!mapRef.current) {
-      mapRef.current = L.map('map').setView([13.7563, 100.5018], zoom);
+      mapRef.current = L.map(mapId.current, {
+        zoomControl: true,
+      }).setView([13.7563, 100.5018], zoom);
 
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors',
@@ -33,160 +55,308 @@ export default function MapComponent({
     } else {
       mapRef.current.setZoom(zoom);
     }
+
+    return () => {
+      mapRef.current?.remove();
+      mapRef.current = null;
+    };
+  }, []);
+
+  // ─────────────────────────────────────────────
+  // UPDATE ZOOM
+  // ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!mapRef.current) return;
+    mapRef.current.setZoom(zoom);
   }, [zoom]);
 
+  // ─────────────────────────────────────────────
+  // USER LOCATION MARKER
+  // ─────────────────────────────────────────────
   useEffect(() => {
     if (!mapRef.current) return;
 
-    // Clear existing markers
+    // ลบ marker เก่า
+    if (userMarkerRef.current) {
+      userMarkerRef.current.remove();
+      userMarkerRef.current = null;
+    }
+
+    if (!userCoords) return;
+
+    const userIcon = L.divIcon({
+      className: 'user-location-marker',
+      html: `
+        <div class="relative flex items-center justify-center">
+          <div class="absolute h-10 w-10 rounded-full bg-blue-500/20 animate-ping"></div>
+          <div class="h-5 w-5 rounded-full border-4 border-white bg-blue-500 shadow-lg"></div>
+        </div>
+      `,
+      iconSize: [40, 40],
+      iconAnchor: [20, 20],
+    });
+
+    userMarkerRef.current = L.marker(
+      [userCoords.lat, userCoords.lng],
+      { icon: userIcon }
+    ).addTo(mapRef.current);
+
+    // focus map
+    mapRef.current.setView([userCoords.lat, userCoords.lng], 12, {
+      animate: true,
+      duration: 0.8,
+    });
+  }, [userCoords]);
+
+  // ─────────────────────────────────────────────
+  // REPORT MARKERS
+  // ─────────────────────────────────────────────
+  useEffect(() => {
+    if (!mapRef.current) return;
+
+    // clear markers
     markersRef.current.forEach((marker) => marker.remove());
     markersRef.current = [];
 
-    // Add new markers with images
     reports.forEach((report) => {
-      if (!report.lat || !report.lng) return;
+      if (
+        typeof report.lat !== 'number' ||
+        typeof report.lng !== 'number'
+      ) {
+        return;
+      }
 
-      // Create custom icon with image
-      const html = document.createElement('div');
-      html.innerHTML = `
-        <div class="relative group cursor-pointer">
-          <div class="absolute -top-12 -left-8 w-16 h-16 rounded-lg overflow-hidden shadow-lg border-2 border-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-50">
-            <img src="${report.images[0]}" alt="${report.title}" class="w-full h-full object-cover" />
-          </div>
-          <div class="w-12 h-12 rounded-full overflow-hidden border-3 border-white shadow-lg transform transition-transform hover:scale-110">
-            <img src="${report.images[0]}" alt="${report.title}" class="w-full h-full object-cover" />
-          </div>
-          <div class="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-xs font-bold" style="background: ${
-            report.type === 'lost' ? '#ef4444' : '#22c55e'
-          }; color: white;">
-            ${report.type === 'lost' ? '•' : '✓'}
-          </div>
-        </div>
-      `;
+      const imageUrl = report.images?.[0] || PLACEHOLDER;
 
       const icon = L.divIcon({
-        html: html.innerHTML,
-        iconSize: [48, 48],
-        iconAnchor: [24, 48],
-        popupAnchor: [0, -48],
-        className: 'map-marker',
+        className: 'custom-marker-wrapper',
+        html: `
+          <div class="group relative cursor-pointer">
+            
+            <div class="
+              w-14 h-14 rounded-full overflow-hidden
+              border-4 border-white
+              shadow-xl
+              transition-transform duration-200
+              hover:scale-110
+              ${
+                report.type === 'lost'
+                  ? 'ring-4 ring-red-400/30'
+                  : 'ring-4 ring-emerald-400/30'
+              }
+            ">
+              <img
+                src="${imageUrl}"
+                alt="${report.title}"
+                class="w-full h-full object-cover"
+                onerror="this.src='${PLACEHOLDER}'"
+              />
+            </div>
+
+            <div
+              class="
+                absolute -bottom-1 left-1/2
+                -translate-x-1/2
+                rounded-full px-2 py-0.5
+                text-[10px] font-black text-white
+                shadow
+                ${
+                  report.type === 'lost'
+                    ? 'bg-red-500'
+                    : 'bg-emerald-500'
+                }
+              "
+            >
+              ${report.type === 'lost' ? 'หาย' : 'พบ'}
+            </div>
+
+          </div>
+        `,
+        iconSize: [56, 56],
+        iconAnchor: [28, 56],
       });
 
-      const marker = L.marker([report.lat, report.lng], { icon })
-        .addTo(mapRef.current!)
-        .on('click', () => {
-          onMarkerClick?.(report);
-          mapRef.current?.setView([report.lat, report.lng], 12, {
+      const marker = L.marker([report.lat, report.lng], {
+        icon,
+      });
+
+      marker.addTo(mapRef.current!);
+
+      marker.on('click', () => {
+        onMarkerClick?.(report);
+
+        mapRef.current?.flyTo(
+          [report.lat, report.lng],
+          14,
+          {
             animate: true,
-            duration: 0.6,
-          });
-        });
-
-      // Add popup
-      const popupContent = `
-        <div class="p-2 min-w-[200px]">
-          <div class="rounded-lg overflow-hidden mb-2 h-32">
-            <img src="${report.images[0]}" alt="${report.title}" class="w-full h-full object-cover" />
-          </div>
-          <p class="text-xs font-bold text-orange-600 uppercase">${report.category}</p>
-          <p class="font-semibold text-sm text-slate-900 mt-1">${report.title}</p>
-          <p class="text-xs text-slate-600 mt-2">${report.address}</p>
-          <div class="flex gap-2 mt-3">
-            <span class="text-xs font-bold px-2 py-1 rounded-full ${
-              report.type === 'lost'
-                ? 'bg-red-100 text-red-700'
-                : 'bg-green-100 text-green-700'
-            }">
-              ${report.type === 'lost' ? 'ของหาย' : 'ของพบ'}
-            </span>
-            ${
-              report.urgent
-                ? '<span class="text-xs font-bold px-2 py-1 rounded-full bg-yellow-100 text-yellow-700">ด่วน</span>'
-                : ''
-            }
-          </div>
-        </div>
-      `;
-
-      marker.bindPopup(popupContent, {
-        maxWidth: 250,
-        className: 'map-popup',
+            duration: 0.8,
+          }
+        );
       });
+
+      // popup
+      marker.bindPopup(
+        `
+          <div class="w-[220px] overflow-hidden rounded-2xl">
+            
+            <div class="h-32 overflow-hidden rounded-xl">
+              <img
+                src="${imageUrl}"
+                alt="${report.title}"
+                class="w-full h-full object-cover"
+                onerror="this.src='${PLACEHOLDER}'"
+              />
+            </div>
+
+            <div class="p-2">
+              
+              <div class="flex items-center gap-2 mb-1">
+                <span class="
+                  rounded-full px-2 py-0.5
+                  text-[10px] font-black text-white
+                  ${
+                    report.type === 'lost'
+                      ? 'bg-red-500'
+                      : 'bg-emerald-500'
+                  }
+                ">
+                  ${
+                    report.type === 'lost'
+                      ? '🐕 สัตว์หาย'
+                      : '🐾 พบสัตว์'
+                  }
+                </span>
+
+                ${
+                  report.urgent
+                    ? `
+                    <span class="rounded-full bg-yellow-400 px-2 py-0.5 text-[10px] font-black text-black">
+                      ด่วน
+                    </span>
+                  `
+                    : ''
+                }
+              </div>
+
+              <p class="font-black text-slate-800 text-sm line-clamp-1">
+                ${report.title}
+              </p>
+
+              <p class="mt-1 text-xs text-slate-500 line-clamp-2">
+                ${report.description || '-'}
+              </p>
+
+              <div class="mt-2 text-[11px] text-slate-400">
+                📍 ${report.district || ''} ${report.province || ''}
+              </div>
+
+            </div>
+          </div>
+        `,
+        {
+          maxWidth: 260,
+          className: 'custom-popup',
+        }
+      );
 
       markersRef.current.push(marker);
     });
 
-    // Auto fit bounds if multiple markers
-    if (reports.length > 0 && zoom === 5) {
-      const bounds = L.latLngBounds(
-        reports
-          .filter((r) => r.lat && r.lng)
-          .map((r) => [r.lat, r.lng] as [number, number])
+    // fit bounds
+    if (reports.length > 0 && !selectedReport) {
+      const validReports = reports.filter(
+        (r) =>
+          typeof r.lat === 'number' &&
+          typeof r.lng === 'number'
       );
 
-      if (bounds.isValid()) {
-        mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 10 });
+      if (validReports.length > 1) {
+        const bounds = L.latLngBounds(
+          validReports.map((r) => [r.lat, r.lng] as [number, number])
+        );
+
+        mapRef.current.fitBounds(bounds, {
+          padding: [60, 60],
+          maxZoom: 12,
+        });
       }
     }
   }, [reports, onMarkerClick]);
 
-  // Pan to selectedReport when it changes
+  // ─────────────────────────────────────────────
+  // SELECTED REPORT
+  // ─────────────────────────────────────────────
   useEffect(() => {
-    if (!mapRef.current || !selectedReport?.lat || !selectedReport?.lng) return;
-    mapRef.current.setView([selectedReport.lat, selectedReport.lng], 12, {
-      animate: true,
-      duration: 0.6,
-    });
+    if (
+      !mapRef.current ||
+      !selectedReport ||
+      typeof selectedReport.lat !== 'number' ||
+      typeof selectedReport.lng !== 'number'
+    ) {
+      return;
+    }
+
+    mapRef.current.flyTo(
+      [selectedReport.lat, selectedReport.lng],
+      14,
+      {
+        animate: true,
+        duration: 0.8,
+      }
+    );
   }, [selectedReport]);
 
   return (
-    <div className={`${height} relative`}>
-      <div id="map" className="w-full h-full rounded-2xl" />
+    <div className={`${height} relative overflow-hidden rounded-2xl`}>
+      <div
+        id={mapId.current}
+        className="h-full w-full"
+      />
 
       <style>{`
-        #map {
+        .leaflet-container {
+          font-family: inherit;
+          z-index: 1;
+        }
+
+        .custom-popup .leaflet-popup-content-wrapper {
           border-radius: 1rem;
+          padding: 0;
+          overflow: hidden;
+          box-shadow:
+            0 20px 40px rgba(0,0,0,.15);
         }
 
-        .map-marker {
-          filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2));
+        .custom-popup .leaflet-popup-content {
+          margin: 0;
         }
 
-        .leaflet-popup-content-wrapper {
-          background-color: white;
-          border-radius: 1rem;
-          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
-          border: 2px solid #f3f4f6;
-        }
-
-        .leaflet-popup-tip {
-          background-color: white;
-          border: 2px solid #f3f4f6;
-          border-radius: 50%;
-        }
-
-        .leaflet-control-zoom-in,
-        .leaflet-control-zoom-out {
-          background-color: white !important;
-          border-radius: 0.75rem;
-          color: #334155;
-          font-weight: bold;
-          font-size: 18px;
-          width: 40px !important;
-          height: 40px !important;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-          border: 1px solid #e2e8f0 !important;
-        }
-
-        .leaflet-control-zoom-in:hover,
-        .leaflet-control-zoom-out:hover {
-          background-color: #f1f5f9 !important;
+        .custom-popup .leaflet-popup-tip {
+          background: white;
         }
 
         .leaflet-control-zoom {
-          border: none;
-          box-shadow: none;
-          gap: 4px;
+          border: none !important;
+          box-shadow: none !important;
+        }
+
+        .leaflet-control-zoom a {
+          width: 42px !important;
+          height: 42px !important;
+          line-height: 42px !important;
+          border-radius: 1rem !important;
+          border: none !important;
+          margin-bottom: 6px;
+          background: white !important;
+          color: #334155 !important;
+          font-weight: bold;
+          box-shadow:
+            0 10px 25px rgba(0,0,0,.12);
+        }
+
+        .leaflet-control-attribution {
+          font-size: 10px !important;
         }
       `}</style>
     </div>
