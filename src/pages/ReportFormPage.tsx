@@ -220,7 +220,7 @@ const DEFAULT_FORM = {
   microchip: '',
   note: '',
   compensationAmount: '',
-  compensationType: 'เงินสด',
+  compensationType: 'จำนวนเงิน',
   hasCompensation: false,  // ✅ ฟิลด์ใหม่: ควบคุมการแสดงผลค่าตอบแทน
   contactPhone: '',
   contactLine: '',
@@ -396,7 +396,7 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
           microchip: d.microchip || '',
           note: d.note || '',
           compensationAmount: d.compensationAmount ? String(d.compensationAmount) : '',
-          compensationType: d.compensationType || 'เงินสด',
+          compensationType: d.compensationType || 'จำนวนเงิน',
           hasCompensation: !!d.compensationAmount,  // ✅ โหลดสถานะจากข้อมูลเดิม
           contactPhone: d.contactPhone || '',
           contactLine: d.contactLine || '',
@@ -942,7 +942,7 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
                     if (!hasComp) {
                       // ถ้าเลือก "ไม่มี" → เคลียร์ค่าทั้งหมด
                       setField('compensationAmount', '');
-                      setField('compensationType', 'เงินสด');
+                      setField('compensationType', 'จำนวนเงิน');
                     }
                   }}
                   cols={2}
