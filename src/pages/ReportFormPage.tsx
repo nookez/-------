@@ -8,11 +8,15 @@ import { Trash2, MapPin, Loader2, Navigation, Search, ChevronDown, Image as Imag
 interface ReportFormPageProps {
   user: User | null;
 }
+
+// ─── ✅ Helper: Strip undefined for Firestore ─────────────────────────────
+// Firestore ไม่รับค่า undefined ต้องตัดออกหรือเปลี่ยนเป็น null
 function stripUndefined<T extends Record<string, any>>(obj: T): Partial<T> {
   return Object.fromEntries(
     Object.entries(obj).filter(([, value]) => value !== undefined)
   ) as Partial<T>;
 }
+
 // ─── Cloudinary ───────────────────────────────────────────────────────────────
 const CLOUDINARY_CLOUD = 'ds6iydtrj';
 const CLOUDINARY_PRESET = 'chuayganha';
@@ -192,6 +196,7 @@ const PET_TYPES = [
 
 const COLORS = ['ขาว','ดำ','น้ำตาล','ส้ม','เหลือง','เทา','ลาย','ขาว-ดำ','ขาว-ส้ม','น้ำตาล-ขาว','อื่น ๆ'];
 
+// ─── ✅ DEFAULT_FORM: เพิ่ม hasCompensation ─────────────────────────────────
 const DEFAULT_FORM = {
   title: '',
   description: '',
@@ -216,6 +221,7 @@ const DEFAULT_FORM = {
   note: '',
   compensationAmount: '',
   compensationType: 'เงินสด',
+  hasCompensation: false,  // ✅ ฟิลด์ใหม่: ควบคุมการแสดงผลค่าตอบแทน
   contactPhone: '',
   contactLine: '',
   contactFacebook: '',
@@ -230,7 +236,7 @@ const TYPE_CONFIG = {
     titlePlaceholder: 'เช่น น้องหมาพันธุ์ปอมเมอเรเนียนหายแถวสยาม',
     descriptionPlaceholder: 'เล่าเพิ่มเติมเกี่ยวกับลักษณะนิสัย จุดสุดท้ายที่เห็น หรือข้อมูลที่เป็นประโยชน์ต่อการค้นหา...',
     showCompensation: true,
-    compensationLabel: '💰 ค่าตอบแทน/รางวัลนำจับ (ไม่บังคับ)',
+    compensationLabel: '💰 ค่าตอบแทน/รางวัลนำจับ',
     contactNote: 'ข้อมูลติดต่อของคุณจะถูกแสดงในโพสต์ เพื่อให้คนที่พบน้องสามารถติดต่อคุณได้',
     successMessage: 'โพสต์แจ้งสัตว์หายของคุณถูกเผยแพร่แล้ว ชุมชนจะช่วยกันตามหาน้องครับ 🙏',
     color: 'orange',
@@ -252,7 +258,18 @@ const TYPE_CONFIG = {
 } as const;
 
 // ─── Baht Input ───────────────────────────────────────────────────────────────
-function BahtInput({ value, onChange, className }: { value: string; onChange: (v: string) => void; className: string }) {
+// ─── Baht Input ───────────────────────────────────────────────────────────────
+function BahtInput({ 
+  value, 
+  onChange, 
+  className,
+  placeholder 
+}: { 
+  value: string; 
+  onChange: (v: string) => void; 
+  className: string;
+  placeholder?: string;  // ✅ เพิ่ม placeholder เป็น optional
+}) {
   const formatted = value ? Number(value).toLocaleString('th-TH') : '';
   return (
     <div className="relative mt-2">
@@ -262,6 +279,7 @@ function BahtInput({ value, onChange, className }: { value: string; onChange: (v
         inputMode="numeric"
         value={formatted}
         onChange={(e) => onChange(e.target.value.replace(/[^0-9]/g, ''))}
+        placeholder={placeholder}  // ✅ ส่ง placeholder ไปที่ input
         className={`${className} pl-8`}
       />
     </div>
@@ -379,6 +397,7 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
           note: d.note || '',
           compensationAmount: d.compensationAmount ? String(d.compensationAmount) : '',
           compensationType: d.compensationType || 'เงินสด',
+          hasCompensation: !!d.compensationAmount,  // ✅ โหลดสถานะจากข้อมูลเดิม
           contactPhone: d.contactPhone || '',
           contactLine: d.contactLine || '',
           contactFacebook: d.contactFacebook || '',
@@ -547,10 +566,13 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
         }
       }
 
-            const allImages = [...existingImages, ...newUrls];
-      const compensation = config.showCompensation && form.compensationAmount
+      const allImages = [...existingImages, ...newUrls];
+      
+      // ✅ ค่าตอบแทน: สร้างเฉพาะเมื่อเลือก "มี" และมีจำนวนเงิน
+      const compensation = config.showCompensation && form.hasCompensation && form.compensationAmount
         ? `${Number(form.compensationAmount).toLocaleString('th-TH')} บาท (${form.compensationType})`
-        : '';
+        : null;
+      
       const effectiveColor = form.color === 'อื่น ๆ' ? form.colorCustom : form.color;
 
       // ✅ สร้าง payload แล้วตัดค่า undefined ออกก่อนส่ง Firestore
@@ -558,22 +580,29 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
         ...form,
         color: effectiveColor,
         category: 'สัตว์เลี้ยง',
-        reward: compensation || null,                    // ใช้ null แทน undefined
-        compensation: compensation || null,
-        compensationAmount: config.showCompensation ? (Number(form.compensationAmount) || 0) : null,
-        compensationType: config.showCompensation ? form.compensationType : null,
+        reward: compensation,
+        compensation: compensation,
+        compensationAmount: config.showCompensation && form.hasCompensation && form.compensationAmount 
+          ? Number(form.compensationAmount) 
+          : null,
+        compensationType: config.showCompensation && form.hasCompensation && form.compensationAmount 
+          ? form.compensationType 
+          : null,
+        hasCompensation: form.hasCompensation || undefined,  // ✅ ตัดออกถ้าเป็น false
         images: allImages,
         tags: ['สัตว์เลี้ยง', form.petType, effectiveColor, form.breed, form.gender, form.size, form.note].filter(Boolean),
       });
 
       setMessage('กำลังบันทึกโพสต์...');
 
-            if (isEditMode && id) {
+      if (isEditMode && id) {
         await updateDoc(doc(db, 'reports', id), { 
-          ...payload,  // ✅ payload นี้ไม่มี undefined แล้ว
+          ...payload,
           updatedAt: serverTimestamp(),
         });
-        // ...
+        setMessage('✓ แก้ไขสำเร็จ');
+        setSaving(false);
+        setTimeout(() => navigate('/profile'), 1200);
       } else {
         const docRef = await addDoc(collection(db, 'reports'), {
           userId: user.uid,
@@ -582,7 +611,7 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
             avatar: user.photoURL || '' 
           },
           type: postType,
-          ...payload,  // ✅ payload นี้ไม่มี undefined แล้ว
+          ...payload,
           status: 'active',
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -592,8 +621,6 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
           viewsCount: 0,
           likedBy: [],
         });
-        // ...
-      
 
         await setDoc(doc(db, 'users', user.uid), { lastReportId: docRef.id }, { merge: true });
         setMessage(config.successMessage);
@@ -887,38 +914,75 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
             <p className="mt-1 text-right text-[11px] text-slate-300">{form.description.length}/500</p>
           </div>
 
-          {/* ค่าตอบแทน (แสดงเฉพาะกรณีสัตว์หาย) */}
+          {/* ✅ ค่าตอบแทน (แสดงเฉพาะกรณีสัตว์หาย) - แก้ไขใหม่ */}
           {config.showCompensation && (
             <div className="rounded-2xl border border-orange-100 bg-orange-50/50 p-5 space-y-4">
               <p className="font-bold text-orange-800 flex items-center gap-2">
                 {config.compensationLabel}
                 <HelpCircle size={16} className="text-orange-400" />
               </p>
-              <p className="text-xs text-orange-600">การระบุค่าตอบแทนอาจช่วยกระตุ้นให้คนช่วยตามหาเร็วขึ้น (ไม่บังคับ)</p>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label className={lbl}>จำนวนเงิน (บาท)</label>
-                  <BahtInput
-                    value={form.compensationAmount}
-                    onChange={(v) => setField('compensationAmount', v)}
-                    className={inp}
-                  />
-                </div>
-                <div>
-                  <label className={lbl}>ประเภท</label>
-                  <div className="relative mt-2">
-                    <select value={form.compensationType} onChange={(e) => setField('compensationType', e.target.value)} className={sel}>
-                      <option>เงินสด</option>
-                      <option>โอนพร้อมเพย์</option>
-                      <option>ของรางวัล</option>
-                      <option>ไม่มี</option>
-                    </select>
-                    <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <p className="text-xs text-orange-600">
+                 <span className="font-medium">(ไม่บังคับ)</span>
+              </p>
+              
+              {/* ✅ Toggle: มีค่าตอบแทน / ไม่มี */}
+              <div className="mt-3">
+                <label className="text-sm font-semibold text-slate-700 mb-2 block">
+                  ต้องการระบุค่าตอบแทนหรือไม่?
+                </label>
+                <ToggleGroup
+                  options={[
+                    { value: 'yes', label: '✅ มีค่าตอบแทน' },
+                    { value: 'no', label: '❌ ไม่มี' },
+                  ]}
+                  value={form.hasCompensation ? 'yes' : 'no'}
+                  onChange={(v) => {
+                    const hasComp = v === 'yes';
+                    setField('hasCompensation', hasComp);
+                    if (!hasComp) {
+                      // ถ้าเลือก "ไม่มี" → เคลียร์ค่าทั้งหมด
+                      setField('compensationAmount', '');
+                      setField('compensationType', 'เงินสด');
+                    }
+                  }}
+                  cols={2}
+                />
+              </div>
+              
+              {/* ✅ แสดงฟิลด์จำนวนเงินเฉพาะเมื่อเลือก "มีค่าตอบแทน" */}
+              {form.hasCompensation && (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className={lbl}>จำนวนเงิน (บาท)</label>
+                    <BahtInput
+                      value={form.compensationAmount}
+                      onChange={(v) => setField('compensationAmount', v)}
+                      className={inp}
+                      placeholder="เช่น 1000"
+                    />
+                  </div>
+                  <div>
+                    <label className={lbl}>ประเภท</label>
+                    <div className="relative mt-2">
+                      <select 
+                        value={form.compensationType} 
+                        onChange={(e) => setField('compensationType', e.target.value)} 
+                        className={sel}
+                      >
+                        <option>เงินสด</option>
+                        <option>โอนพร้อมเพย์</option>
+                        <option>ของรางวัล</option>
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                    </div>
                   </div>
                 </div>
-              </div>
-              {form.compensationAmount && (
-                <p className="text-sm font-bold text-orange-700">
+              )}
+              
+              {/* ✅ แสดงสรุปค่าตอบแทนเมื่อกรอกแล้ว */}
+              {form.hasCompensation && form.compensationAmount && (
+                <p className="text-sm font-bold text-orange-700 flex items-center gap-2">
+                  <CheckCircle2 size={14} className="text-orange-500" />
                   ฿{Number(form.compensationAmount).toLocaleString('th-TH')} ({form.compensationType})
                 </p>
               )}
@@ -1140,7 +1204,7 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
             <Row label={config.dateLabel} value={`${form.date}${form.time ? ' · ' + form.time : ''}`} />
             <Row label="ตำแหน่ง" value={[form.district, form.province].filter(Boolean).join(', ') || '(ยังไม่ระบุ)'} />
             <Row label="รูปภาพ" value={`${existingImages.length + images.length} รูป`} />
-            {config.showCompensation && form.compensationAmount && (
+            {config.showCompensation && form.hasCompensation && form.compensationAmount && (
               <Row label="ค่าตอบแทน" value={`฿${Number(form.compensationAmount).toLocaleString('th-TH')} (${form.compensationType})`} />
             )}
           </div>
