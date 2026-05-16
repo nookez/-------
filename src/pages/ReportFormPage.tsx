@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import { addDoc, collection, db, doc, serverTimestamp, setDoc, getDoc, updateDoc } from '../firebase';
 import type { User } from 'firebase/auth';
-import { Trash2, MapPin, Loader2, Navigation, Search, ChevronDown } from 'lucide-react';
+import { Trash2, MapPin, Loader2, Navigation, Search, ChevronDown, Image as ImageIcon } from 'lucide-react';
 
 interface ReportFormPageProps {
   user: User | null;
@@ -12,6 +12,84 @@ interface ReportFormPageProps {
 // ─── Cloudinary ───────────────────────────────────────────────────────────────
 const CLOUDINARY_CLOUD = 'ds6iydtrj';
 const CLOUDINARY_PRESET = 'chuayganha';
+
+// ─── Image Compression Helper (ลดขนาดรูปก่อนอัปโหลด) ──────────────────────────
+/**
+ * บีบอัดรูปภาพโดยใช้ Canvas
+ * @param file ไฟล์รูปภาพต้นฉบับ
+ * @param maxWidth ความกว้างสูงสุด (px) - Default 1200
+ * @param quality คุณภาพ JPEG (0.0 - 1.0) - Default 0.85
+ */
+async function compressImage(
+  file: File, 
+  maxWidth: number = 1200, 
+  quality: number = 0.85
+): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      
+      img.onload = () => {
+        // คำนวณขนาดใหม่ โดยรักษาอัตราส่วน (Aspect Ratio)
+        let width = img.width;
+        let height = img.height;
+        
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+        
+        // สร้าง Canvas
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('ไม่สามารถสร้าง Context ของ Canvas ได้'));
+          return;
+        }
+        
+        // วาดรูปลง Canvas
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // แปลงกลับเป็น Blob (JPEG เพื่อลดขนาดได้ดีกว่า PNG สำหรับรูปถ่าย)
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error('การแปลงรูปล้มเหลว'));
+              return;
+            }
+            
+            // สร้าง File ใหม่จาก Blob
+            // ใช้ชื่อไฟล์เดิมแต่เปลี่ยนนามสกุลเป็น .jpg ถ้าไม่ใช่ png โปร่งใส
+            const fileName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
+            const compressedFile = new File([blob], fileName, {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            });
+            
+            resolve(compressedFile);
+          },
+          'image/jpeg',
+          quality
+        );
+      };
+      
+      img.onerror = () => {
+        reject(new Error('โหลดรูปภาพไม่สำเร็จ'));
+      };
+    };
+    
+    reader.onerror = () => {
+      reject(new Error('อ่านไฟล์ไม่สำเร็จ'));
+    };
+  });
+}
 
 async function uploadToCloudinary(file: File): Promise<string> {
   const fd = new FormData();
@@ -214,6 +292,9 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
   const [geocoding, setGeocoding] = useState(false);
   const [gpsLoading, setGpsLoading] = useState(false);
   const [addressSearch, setAddressSearch] = useState('');
+  
+  // ✅ State สำหรับแสดงสถานะการบีบอัดรูป
+  const [compressingInfo, setCompressingInfo] = useState<{ original: number, compressed: number } | null>(null);
 
   const STEPS = ['สัตว์', 'ตำแหน่ง', 'รูปภาพ', 'ติดต่อ'];
   const geocodeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -343,11 +424,54 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
     );
   };
 
-  const handleFiles = (files: FileList | null) => {
+  // ✅ แก้ไขฟังก์ชันจัดการไฟล์: บีบอัดรูปก่อนเพิ่มเข้า State
+  const handleFiles = async (files: FileList | null) => {
     if (!files) return;
-    const all = [...images, ...Array.from(files)].slice(0, 5);
-    setImages(all);
-    setPreviews(all.map((f) => URL.createObjectURL(f)));
+    
+    // แสดงสถานะกำลังประมวลผล
+    setMessage('กำลังเตรียมรูปภาพ...');
+    
+    try {
+      const newFiles: File[] = [];
+      let totalOriginalSize = 0;
+      let totalCompressedSize = 0;
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (!file.type.startsWith('image/')) continue;
+
+        totalOriginalSize += file.size;
+
+        // ✅ เรียกใช้ฟังก์ชันบีบอัดรูป
+        // ตั้งค่า: กว้างสุด 1200px, คุณภาพ 85%
+        const compressedFile = await compressImage(file, 1200, 0.85);
+        
+        newFiles.push(compressedFile);
+        totalCompressedSize += compressedFile.size;
+      }
+
+      // รวมกับรูปเดิมที่มีอยู่ (ไม่เกิน 5 รูป)
+      const allImages = [...images, ...newFiles].slice(0, 5);
+      setImages(allImages);
+      
+      // สร้าง Preview จากไฟล์ที่บีบอัดแล้ว
+      setPreviews(allImages.map((f) => URL.createObjectURL(f)));
+
+      // แสดงสถิติการลดขนาด (Optional Debug Info)
+      const savedPercent = ((totalOriginalSize - totalCompressedSize) / totalOriginalSize * 100).toFixed(1);
+      console.log(`📉 Image Compression: Original ${(totalOriginalSize/1024/1024).toFixed(2)}MB -> Compressed ${(totalCompressedSize/1024/1024).toFixed(2)}MB (Saved ${savedPercent}%)`);
+      
+      setCompressingInfo({
+        original: totalOriginalSize,
+        compressed: totalCompressedSize
+      });
+      
+      setMessage(''); // เคลียร์ข้อความ
+    } catch (err) {
+      console.error('Image processing error:', err);
+      alert('เกิดข้อผิดพลาดในการเตรียมรูปภาพ');
+      setMessage('');
+    }
   };
 
   // ── Validation ─────────────────────────────────────────────────────────────
@@ -388,7 +512,7 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
     setMessage('กำลังอัปโหลดรูปภาพ...');
 
     try {
-      // Upload new images
+      // Upload new images (ซึ่งถูกบีบอัดมาแล้วจาก handleFiles)
       const newUrls: string[] = [];
       for (let i = 0; i < images.length; i++) {
         try {
@@ -439,7 +563,7 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
           },
           type: type === 'lost' ? 'lost' : 'found',
           ...payload,
-          status: type === 'lost' ? 'กำลังตาม' : 'พบแล้ว',
+          status: 'active',
           resolved: false,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -531,7 +655,6 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
       {/* ══ Step 0: ข้อมูลสัตว์ ══ */}
       {step === 0 && (
         <div className="rounded-3xl bg-white p-6 shadow-glass space-y-6">
-
           {/* หัวข้อ */}
           <div>
             <label className={lbl}>หัวข้อโพสต์ <span className="text-red-400">*</span></label>
@@ -825,7 +948,7 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
         </div>
       )}
 
-      {/* ══ Step 2: รูปภาพ ══ */}
+      {/* ══ Step 2: รูปภาพ (With Compression Info) ══ */}
       {step === 2 && (
         <div className="rounded-3xl bg-white p-6 shadow-glass space-y-5">
           {isEditMode && existingImages.length > 0 && (
@@ -854,6 +977,18 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
               {isEditMode ? 'เพิ่มรูปภาพ' : `รูปภาพ (${images.length}/5)`}
               {!isEditMode && <span className="text-red-400"> *</span>}
             </p>
+            
+            {/* ✅ แสดงข้อมูลการลดขนาดไฟล์ (ถ้ามี) */}
+            {compressingInfo && (
+              <div className="mb-3 p-3 rounded-xl bg-blue-50 border border-blue-100 flex items-center gap-3 text-xs text-blue-700">
+                <ImageIcon className="h-5 w-5 shrink-0" />
+                <div>
+                  <p className="font-semibold">ระบบได้บีบอัดรูปภาพอัตโนมัติเพื่อประหยัดเน็ต</p>
+                  <p>ลดจาก {(compressingInfo.original / 1024 / 1024).toFixed(2)} MB เหลือ {(compressingInfo.compressed / 1024 / 1024).toFixed(2)} MB</p>
+                </div>
+              </div>
+            )}
+
             <div
               onDragOver={(e) => e.preventDefault()}
               onDrop={(e) => { e.preventDefault(); handleFiles(e.dataTransfer.files); }}
@@ -866,7 +1001,7 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
                 เลือกรูปภาพ
                 <input type="file" multiple accept="image/*" className="hidden" onChange={(e) => handleFiles(e.target.files)} />
               </label>
-              <p className="mt-3 text-xs text-slate-400">ลากรูปวางที่นี่ได้เลย · สูงสุด 5 รูป</p>
+              <p className="mt-3 text-xs text-slate-400">ลากรูปวางที่นี่ได้เลย · สูงสุด 5 รูป · <span className="text-orange-600 font-medium">ระบบจะย่อขนาดให้อัตโนมัติ</span></p>
             </div>
 
             {uploadProgress > 0 && uploadProgress < 100 && (

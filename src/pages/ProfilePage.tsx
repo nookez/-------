@@ -15,9 +15,10 @@ interface ProfilePageProps {
   user: User | null;
 }
 
-// ─── Type Extension: เพิ่มฟิลด์สถานะชั่วคราว ───────────────────────────────
+type ReportStatus = 'active' | 'resolved' | 'closed';
+
 type ReportWithStatus = Report & {
-  status?: 'active' | 'resolved' | 'closed';
+  status?: ReportStatus;
 };
 
 const PLACEHOLDER = 'https://placehold.co/400x300/f8fafc/cbd5e1?text=No+Image';
@@ -33,17 +34,34 @@ function timeAgo(dateString: string): string {
   } catch { return '—'; }
 }
 
+// ✅ Normalize status รองรับค่าภาษาไทยและค่าแปลกๆ จาก Firestore
+function normalizeStatus(raw: any): ReportStatus {
+  const s = String(raw || '').toLowerCase();
+  if (s === 'resolved' || s === 'พบแล้ว') return 'resolved';
+  if (s === 'closed' || s === 'ปิด') return 'closed';
+  return 'active'; // 'กำลังตาม', '', undefined → active
+}
+
+// ✅ Normalize type รองรับค่าแปลกๆ จาก Firestore
+function normalizeType(raw: any): 'lost' | 'found' {
+  const t = String(raw || '').toLowerCase();
+  if (t === 'found' || t === 'พบ') return 'found';
+  return 'lost';
+}
+
 function mapReport(d: any): ReportWithStatus {
   const data = d.data();
   return {
-    id: d.id, ...data,
+    id: d.id,
+    ...data,
     createdAt: data.createdAt instanceof Timestamp
       ? data.createdAt.toDate().toISOString()
       : new Date().toISOString(),
     likesCount: typeof data.likesCount === 'number' ? data.likesCount : 0,
     commentsCount: typeof data.commentsCount === 'number' ? data.commentsCount : 0,
     viewsCount: typeof data.viewsCount === 'number' ? data.viewsCount : 0,
-    status: data.status ?? 'active',
+    type: normalizeType(data.type),
+    status: normalizeStatus(data.status),
   };
 }
 
@@ -70,11 +88,7 @@ export default function ProfilePage({ user }: ProfilePageProps) {
   const [markingFoundId, setMarkingFoundId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!user) {
-      setLoading(false);
-      return;
-    }
-    
+    if (!user) { setLoading(false); return; }
     const currentUid = user.uid;
 
     async function loadMyPosts() {
@@ -88,9 +102,7 @@ export default function ProfilePage({ user }: ProfilePageProps) {
         );
         const snap = await getDocs(q);
         const reports = snap.docs.map(mapReport);
-        
         setMyReports(reports);
-        
         if (reports.length > 0) {
           const realCounts = await fetchRealCommentCounts(reports.map(r => r.id));
           setCommentCounts(realCounts);
@@ -117,23 +129,21 @@ export default function ProfilePage({ user }: ProfilePageProps) {
     }
   }
 
-  // 🎯 Handle marking a lost pet report as FOUND (owner confirmation)
+  // ✅ กด "พบแล้ว" → เปลี่ยนทั้ง type: 'found' และ status: 'resolved' ใน Firestore
   async function handleMarkAsFound(reportId: string) {
-    if (!confirm('ยืนยันว่าพบสัตว์เลี้ยงนี้แล้วใช่ไหม?\n\nโพสต์นี้จะถูกทำเครื่องหมายว่า "พบแล้ว" และแสดงบนแผนที่')) return;
-    
+    if (!confirm('ยืนยันว่าพบสัตว์เลี้ยงนี้แล้วใช่ไหม?\n\nโพสต์จะย้ายไปแท็บ "🐾 พบ" บนแผนที่')) return;
     try {
       setMarkingFoundId(reportId);
-      
       await updateDoc(doc(db, 'reports', reportId), {
-        status: 'resolved',
+        type: 'found',       // ✅ เปลี่ยน type จาก 'lost' → 'found'
+        status: 'resolved',  // ✅ เปลี่ยน status เป็น 'resolved'
         updatedAt: Timestamp.now(),
       });
-      
-      setMyReports(prev => prev.map(r => 
-        r.id === reportId ? { ...r, status: 'resolved' } : r
+      // ✅ อัปเดต local state ทันที ไม่ต้อง reload
+      setMyReports(prev => prev.map(r =>
+        r.id === reportId ? { ...r, type: 'found', status: 'resolved' } : r
       ));
-      
-      alert('✅ อัปเดตสำเร็จ! โพสต์นี้แสดงเป็น "พบแล้ว" บนแผนที่แล้ว');
+      alert('✅ อัปเดตสำเร็จ! โพสต์ย้ายไปแท็บ "🐾 พบ" แล้ว');
     } catch (err) {
       console.error('Mark as found failed:', err);
       alert('❌ อัปเดตไม่สำเร็จ กรุณาลองใหม่');
@@ -182,7 +192,7 @@ export default function ProfilePage({ user }: ProfilePageProps) {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6 space-y-6">
-      
+
       {/* ── Profile Header ── */}
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
@@ -190,7 +200,6 @@ export default function ProfilePage({ user }: ProfilePageProps) {
             <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">บัญชีของฉัน</p>
             <h1 className="text-2xl font-bold text-slate-900">{displayName}</h1>
             <p className="text-sm text-slate-500">{user.email}</p>
-            
             <div className="mt-4 flex flex-wrap gap-3">
               <div className="rounded-xl border border-orange-100 bg-orange-50 px-4 py-2">
                 <p className="text-xs font-medium text-orange-600">โพสต์ทั้งหมด</p>
@@ -206,14 +215,13 @@ export default function ProfilePage({ user }: ProfilePageProps) {
               </div>
             </div>
           </div>
-
           <div className="flex flex-wrap gap-3">
             <Link to="/report/lost" className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-600">
               <Plus size={18} /> สร้างโพสต์
             </Link>
-            <button 
-              onClick={handleLogout} 
-              disabled={loggingOut} 
+            <button
+              onClick={handleLogout}
+              disabled={loggingOut}
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
             >
               {loggingOut ? <Loader2 size={18} className="animate-spin" /> : <LogOut size={18} />}
@@ -253,17 +261,16 @@ export default function ProfilePage({ user }: ProfilePageProps) {
             {myReports.map((report) => {
               const isResolved = report.status === 'resolved';
               const isLostType = report.type === 'lost';
-              
+
               return (
-                <article 
-                  key={report.id} 
+                <article
+                  key={report.id}
                   className={`group overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:shadow-md ${
-                    isResolved 
-                      ? 'border-emerald-300 ring-1 ring-emerald-100' 
+                    isResolved
+                      ? 'border-emerald-300 ring-1 ring-emerald-100'
                       : 'border-slate-200 hover:border-orange-200'
                   }`}
                 >
-                  {/* Image */}
                   <Link to={`/detail/${report.id}`} className="relative block overflow-hidden">
                     <img
                       src={report.images?.[0] || PLACEHOLDER}
@@ -274,19 +281,15 @@ export default function ProfilePage({ user }: ProfilePageProps) {
                       loading="lazy"
                       onError={(e) => { (e.target as HTMLImageElement).src = PLACEHOLDER; }}
                     />
-                    
-                    {/* Status Badge */}
                     <div className={`absolute left-3 top-3 rounded-lg px-2.5 py-1 text-xs font-semibold shadow-sm backdrop-blur-sm ${
-                      isResolved 
-                        ? 'bg-emerald-500/90 text-white' 
-                        : report.type === 'lost' 
-                          ? 'bg-red-500/90 text-white' 
+                      isResolved
+                        ? 'bg-emerald-500/90 text-white'
+                        : isLostType
+                          ? 'bg-red-500/90 text-white'
                           : 'bg-emerald-500/90 text-white'
                     }`}>
-                      {isResolved ? '✅ พบแล้ว' : report.type === 'lost' ? 'สัตว์หาย' : 'พบสัตว์'}
+                      {isResolved ? '✅ พบแล้ว' : isLostType ? '🐕 สัตว์หาย' : '🐾 พบสัตว์'}
                     </div>
-                    
-                    {/* Resolved Overlay */}
                     {isResolved && (
                       <div className="absolute inset-0 bg-emerald-500/10 flex items-center justify-center pointer-events-none">
                         <CheckCircle2 className="h-16 w-16 text-emerald-500/50" />
@@ -294,7 +297,6 @@ export default function ProfilePage({ user }: ProfilePageProps) {
                     )}
                   </Link>
 
-                  {/* Content */}
                   <div className="p-5 space-y-3">
                     <div>
                       <h3 className={`font-semibold line-clamp-1 transition ${
@@ -325,10 +327,8 @@ export default function ProfilePage({ user }: ProfilePageProps) {
                         <span className="flex items-center gap-1"><Eye size={14} /> {report.viewsCount || 0}</span>
                       </div>
 
-                      {/* ── Action Buttons Group ── */}
                       <div className="flex items-center gap-2">
-                        
-                        {/* ✅ PROMINENT "Mark as Found" Button */}
+                        {/* ✅ แสดงปุ่ม "พบแล้ว" เฉพาะ lost + active เท่านั้น */}
                         {isLostType && !isResolved && (
                           <button
                             onClick={() => handleMarkAsFound(report.id)}
@@ -336,19 +336,14 @@ export default function ProfilePage({ user }: ProfilePageProps) {
                             className="group relative inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-green-500 px-3 py-2 text-xs font-bold text-white shadow-md shadow-emerald-500/25 transition-all hover:shadow-emerald-500/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100"
                             title="ยืนยันว่าพบสัตว์แล้ว"
                           >
-                            {/* ✨ Sparkle animation */}
                             <Sparkles className="absolute -top-1 -right-1 h-3 w-3 text-yellow-300 animate-pulse" />
-                            
-                            {/* Icon + Text */}
-                            {markingFoundId === report.id 
-                              ? <Loader2 size={14} className="animate-spin" /> 
+                            {markingFoundId === report.id
+                              ? <Loader2 size={14} className="animate-spin" />
                               : <CheckCircle2 size={14} className="transition-transform group-hover:scale-110" />
                             }
                             <span className="hidden sm:inline">พบแล้ว</span>
                           </button>
                         )}
-                        
-                        {/* Edit Button (subtle) */}
                         <Link
                           to={`/report/edit/${report.id}`}
                           className="p-2 rounded-lg text-slate-400 hover:text-orange-500 hover:bg-orange-50 transition"
@@ -356,8 +351,6 @@ export default function ProfilePage({ user }: ProfilePageProps) {
                         >
                           <Pencil size={16} />
                         </Link>
-                        
-                        {/* Delete Button (subtle) */}
                         <button
                           onClick={() => handleDelete(report.id)}
                           disabled={deletingId === report.id}

@@ -38,7 +38,7 @@ interface LandingPageProps {
   user: User | null;
 }
 
-// ─── helpers ────────────────────────────────────────────────────────────────
+// ─── helpers ───────────────────────────────────────────────────────────────
 function timeAgo(dateString: string): string {
   try {
     const diff = (Date.now() - new Date(dateString).getTime()) / 1000;
@@ -255,7 +255,7 @@ function DonationSection() {
   );
 }
 
-// ─── Mini Map Component (Thailand-wide + Locked + Click to Full Map) ───────
+// ─── Mini Map Component (Clean Click -> Navigate) ──────────────────────────
 function MiniPetMap({ reports }: { reports: Report[] }) {
   const navigate = useNavigate();
 
@@ -271,22 +271,9 @@ function MiniPetMap({ reports }: { reports: Report[] }) {
 
   const getMarkerColor = (type: string) => type === 'lost' ? '#f97316' : '#10b981';
 
+  // ✅ คลิกแล้วนำทางไปหน้าแผนที่ทันที (ไม่มี Toast)
   const handleMapClick = () => {
-    const toast = document.createElement('div');
-    toast.className = 'fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl text-sm font-medium animate-fade-in-up flex items-center gap-2';
-    toast.innerHTML = `
-      <Navigation class="h-4 w-4 text-orange-400" />
-      <span>กดเพื่อดูแผนที่แบบเต็ม →</span>
-    `;
-    document.body.appendChild(toast);
-    
-    setTimeout(() => {
-      navigate('/map');
-    }, 1200);
-    
-    setTimeout(() => {
-      toast.remove();
-    }, 3000);
+    navigate('/map');
   };
 
   return (
@@ -400,7 +387,7 @@ function MiniPetMap({ reports }: { reports: Report[] }) {
                       <Link 
                         to={`/detail/${report.id}`}
                         className="inline-flex items-center justify-center w-full mt-3 rounded-lg bg-orange-500 px-3 py-2 text-xs font-semibold text-white hover:bg-orange-600 transition"
-                        onClick={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()} // ป้องกันไม่ให้คลิกลิงก์แล้วเปิดแผนที่
                       >
                         ดูรายละเอียด →
                       </Link>
@@ -412,8 +399,9 @@ function MiniPetMap({ reports }: { reports: Report[] }) {
           })}
         </MapContainer>
         
+        {/* Hover Overlay: บอกว่าคลิกได้ */}
         <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/10 transition-colors pointer-events-none">
-          <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-auto">
+          <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-auto transform translate-y-2 group-hover:translate-y-0">
             <div className="bg-white/95 backdrop-blur-sm rounded-2xl px-4 py-3 shadow-xl border border-slate-200 flex items-center gap-2">
               <Navigation className="h-4 w-4 text-orange-500" />
               <span className="text-sm font-semibold text-slate-700">คลิกเพื่อดูแผนที่เต็ม</span>
