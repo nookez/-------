@@ -969,9 +969,8 @@ export default function ReportFormPage({ user }: ReportFormPageProps) {
                         onChange={(e) => setField('compensationType', e.target.value)} 
                         className={sel}
                       >
-                        <option>เงินสด</option>
-                        <option>โอนพร้อมเพย์</option>
-                        <option>ของรางวัล</option>
+                        <option>ค่าตอบแทน</option>
+                        
                       </select>
                       <ChevronDown className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                     </div>
