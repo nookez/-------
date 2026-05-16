@@ -2,15 +2,82 @@
 <html lang="th">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ช่วยกันหา</title>
-    <meta name="description" content="ช่วยกันหา - แพลตฟอร์มช่วยตามของหายและของพบสำหรับคนไทย" />
+
+    <!-- Responsive -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=5.0"
+    />
+
+    <!-- SEO -->
+    <title>ช่วยกันหา - แพลตฟอร์มตามหาสัตว์เลี้ยงหายทั่วไทย</title>
+
+    <meta
+      name="description"
+      content="แพลตฟอร์มกลางสำหรับแจ้งสัตว์เลี้ยงหายและพบสัตว์เร่ร่อน พร้อมระบบแผนที่ Real-time ช่วยให้น้องหมา น้องแมว กลับบ้านได้เร็วขึ้น"
+    />
+
+    <meta
+      name="keywords"
+      content="สัตว์เลี้ยงหาย, ตามหาหมา, ตามหาแมว, แจ้งสัตว์หาย, พบสัตว์, ช่วยกันหา"
+    />
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://chuayganha.vercel.app/" />
+    <meta
+      property="og:title"
+      content="ช่วยกันหา - ตามหาสัตว์เลี้ยงหาย"
+    />
+
+    <meta
+      property="og:description"
+      content="ช่วยเหลือน้องสัตว์เลี้ยงให้กลับบ้านอย่างปลอดภัย ด้วยระบบแผนที่และชุมชนคนรักสัตว์"
+    />
+
+    <meta property="og:image" content="/og-image.png" />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+
+    <meta
+      property="twitter:title"
+      content="ช่วยกันหา - ตามหาสัตว์เลี้ยงหาย"
+    />
+
+    <meta
+      property="twitter:description"
+      content="ช่วยเหลือน้องสัตว์เลี้ยงให้กลับบ้านอย่างปลอดภัย"
+    />
+
+    <meta property="twitter:image" content="/og-image.png" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/favicon-v2.png" />
+
+    <link rel="apple-touch-icon" href="/favicon-v2.png" />
+
+    <!-- Theme -->
+    <meta name="theme-color" content="#f97316" />
+
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+    <link
+      rel="preconnect"
+      href="https://fonts.gstatic.com"
+      crossorigin
+    />
+
+    <link
+      href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
   </head>
-  <body class="bg-white text-slate-900">
+
+  <body class="bg-white text-slate-900 antialiased">
     <div id="root"></div>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

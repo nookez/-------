@@ -1,19 +1,33 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, lazy, Suspense } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, auth } from './firebase';
 import type { User } from 'firebase/auth';
 import ProtectedRoute from './components/ProtectedRoute';
+
+// ✅ 1. Import หน้าหลักที่จำเป็นทันที (Critical Path)
 import LandingPage from './pages/LandingPage';
 import AuthPage from './pages/AuthPage';
 import HomeFeedPage from './pages/HomeFeedPage';
-import HomeMapPage from './pages/HomeMapPage'; // หรือ MapPage ตามชื่อไฟล์จริงของคุณ
-import ReportFormPage from './pages/ReportFormPage';
+import DetailPage from './pages/DetailPage';
 import ProfilePage from './pages/ProfilePage';
 import AppShell from './components/AppShell';
-import DetailPage from './pages/DetailPage';
-// ✅ เพิ่ม Import หน้า Admin
-import AdminPage from './pages/AdminPage'; 
+
+// ✅ 2. Lazy Load หน้าที่หนักหรือไม่สำคัญต่อหน้าแรก (Non-Critical)
+// ช่วยลดขนาด Bundle เริ่มต้น ทำให้เว็บโหลดเร็วขึ้น
+const HomeMapPage = lazy(() => import('./pages/HomeMapPage'));
+const ReportFormPage = lazy(() => import('./pages/ReportFormPage'));
+const AdminPage = lazy(() => import('./pages/AdminPage'));
+
+// ✅ Component สำหรับแสดงขณะรอโหลดหน้า (Fallback)
+const PageLoader = () => (
+  <div className="flex min-h-[60vh] items-center justify-center">
+    <div className="flex flex-col items-center gap-3 rounded-3xl bg-white/90 p-6 shadow-glass">
+      <div className="h-8 w-8 animate-spin rounded-full border-4 border-orange-200 border-t-orange-500"></div>
+      <p className="font-medium text-orange-600">กำลังโหลดหน้า...</p>
+    </div>
+  </div>
+);
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -56,7 +70,14 @@ function App() {
               <Route path="/auth/:mode" element={<AuthPage />} />
               
               {/* Map & Feed */}
-              <Route path="/map" element={<HomeMapPage user={user} />} />
+              <Route 
+                path="/map" 
+                element={
+                  <Suspense fallback={<PageLoader />}>
+                    <HomeMapPage user={user} />
+                  </Suspense>
+                } 
+              />
               <Route path="/feed" element={<HomeFeedPage user={user} />} />
               
               {/* Detail View */}
@@ -67,7 +88,9 @@ function App() {
                 path="/report/:type"
                 element={
                   <ProtectedRoute user={user}>
-                    <ReportFormPage user={user} />
+                    <Suspense fallback={<PageLoader />}>
+                      <ReportFormPage user={user} />
+                    </Suspense>
                   </ProtectedRoute>
                 }
               />
@@ -77,7 +100,9 @@ function App() {
                 path="/report/edit/:id"
                 element={
                   <ProtectedRoute user={user}>
-                    <ReportFormPage user={user} />
+                    <Suspense fallback={<PageLoader />}>
+                      <ReportFormPage user={user} />
+                    </Suspense>
                   </ProtectedRoute>
                 }
               />
@@ -92,12 +117,14 @@ function App() {
                 }
               />
 
-              {/* ✅ Admin Route (เช็กสิทธิ์ภายใน Component แล้ว แต่ใส่ไว้ใน Routes ให้ชัดเจน) */}
+              {/* ✅ Admin Route */}
               <Route 
                 path="/admin" 
                 element={
                   <ProtectedRoute user={user}>
-                    <AdminPage />
+                    <Suspense fallback={<PageLoader />}>
+                      <AdminPage />
+                    </Suspense>
                   </ProtectedRoute>
                 } 
               />
