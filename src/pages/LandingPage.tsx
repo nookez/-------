@@ -8,7 +8,7 @@ import {
   Clock3, AlertCircle, Loader2, Search, PawPrint, CheckCircle2,
   Bell, Users, Megaphone, QrCode, Copy, Check, Navigation,
   Lightbulb, Volume2, Flashlight, MapPinned, PhoneCall, Camera,
-  Sparkles, Target, Timer, Share2, Info, ShieldCheck
+  Sparkles, Target, Timer, Share2, Info, ShieldCheck, HandHeart, Home
 } from 'lucide-react';
 import type { User } from 'firebase/auth';
 import {
@@ -90,7 +90,7 @@ function useStats() {
       try {
         const [usersSnap, resolvedSnap, postsSnap] = await Promise.all([
           getCountFromServer(collection(db, 'users')),
-          getCountFromServer(query(collection(db, 'reports'), where('status', '==', 'resolved'))), // แก้ไขให้ตรงกับ field status
+          getCountFromServer(query(collection(db, 'reports'), where('status', '==', 'resolved'))),
           getCountFromServer(collection(db, 'reports')),
         ]);
         setStats({
@@ -150,12 +150,32 @@ function StatNum({ n, loading }: { n: number; loading: boolean }) {
   return <>{n >= 1000 ? `${(n / 1000).toFixed(1)}k+` : `${n}+`}</>;
 }
 
-// ─── How To Steps ──────────────────────────────────────────────────────────
+// ─── How To Steps (Updated for 3 statuses) ──────────────────────────────────
 const HOW_TO = [
-  { icon: Search, label: 'ค้นหาโพสต์', desc: 'กรองตามประเภทสัตว์ จังหวัด หรือคำค้นหา' },
-  { icon: PawPrint, label: 'แจ้งสัตว์หาย/พบ', desc: 'ลงโพสต์พร้อมรูปภาพและรายละเอียดสัตว์' },
-  { icon: Bell, label: 'รับการแจ้งเตือน', desc: 'ได้รับแจ้งเมื่อมีโพสต์ที่ตรงกับสัตว์ของคุณ' },
-  { icon: CheckCircle2, label: 'ปิดเคส', desc: 'กดยืนยันเมื่อพบสัตว์หรือเจ้าของแล้ว' },
+  { 
+    icon: AlertCircle, 
+    label: 'แจ้งสัตว์หาย', 
+    desc: 'สำหรับเจ้าของ: ลงโพสต์พร้อมรายละเอียดและตำแหน่งสุดท้ายที่เห็นน้อง',
+    color: 'orange'
+  },
+  { 
+    icon: HandHeart, 
+    label: 'แจ้งพบสัตว์', 
+    desc: 'สำหรับผู้พบ: แจ้งตำแหน่งและลักษณะสัตว์ที่พบ เพื่อช่วยตามหาเจ้าของ',
+    color: 'emerald'
+  },
+  { 
+    icon: PhoneCall, 
+    label: 'ติดต่อประสานงาน', 
+    desc: 'ใช้ข้อมูลติดต่อในโพสต์เพื่อประสานงานและส่งน้องกลับบ้าน',
+    color: 'blue'
+  },
+  { 
+    icon: Home, 
+    label: 'ยืนยันคืนสัตว์', 
+    desc: 'เมื่อพบกันแล้ว: กดยืนยัน "พบแล้ว" เพื่อปิดเคสและอัปเดตสถานะ',
+    color: 'slate'
+  },
 ];
 
 // ── Sponsor Banner Component ──
@@ -187,7 +207,7 @@ function SponsorBanner() {
   );
 }
 
-// ── Donation Section Component (Updated) ──
+// ── Donation Section Component ──
 function DonationSection() {
   const [copied, setCopied] = useState(false);
   const accountNumber = '6626126431';
@@ -218,7 +238,6 @@ function DonationSection() {
         </div>
 
         <div className="rounded-2xl border border-green-200 bg-white p-5 shadow-sm sm:min-w-[240px]">
-          {/* QR Code Image */}
           <div className="flex h-36 w-36 mx-auto items-center justify-center rounded-xl bg-slate-50 mb-4 overflow-hidden border border-slate-200">
             <img 
               src="/qr.JPG" 
@@ -255,7 +274,7 @@ function DonationSection() {
   );
 }
 
-// ─── Mini Map Component (Clean Click -> Navigate) ──────────────────────────
+// ─── Mini Map Component ──────────────────────────────────────────────────
 function MiniPetMap({ reports }: { reports: Report[] }) {
   const navigate = useNavigate();
 
@@ -269,9 +288,11 @@ function MiniPetMap({ reports }: { reports: Report[] }) {
   const center: [number, number] = [15.8700, 100.9925];
   const defaultZoom = 6;
 
-  const getMarkerColor = (type: string) => type === 'lost' ? '#f97316' : '#10b981';
+  const getMarkerColor = (type: string, status?: string) => {
+    if (status === 'resolved') return '#94a3b8'; // สีเทาสำหรับเคสที่ปิดแล้ว
+    return type === 'lost' ? '#f97316' : '#10b981';
+  };
 
-  // ✅ คลิกแล้วนำทางไปหน้าแผนที่ทันที (ไม่มี Toast)
   const handleMapClick = () => {
     navigate('/map');
   };
@@ -314,6 +335,8 @@ function MiniPetMap({ reports }: { reports: Report[] }) {
           
           {validReports.map((report) => {
             const thumbnail = report.images?.[0] || PLACEHOLDER;
+            const isResolved = report.status === 'resolved';
+            
             return (
               <Marker 
                 key={report.id} 
@@ -325,7 +348,7 @@ function MiniPetMap({ reports }: { reports: Report[] }) {
                       width: 28px;
                       height: 28px;
                       border-radius: 50%;
-                      background: ${getMarkerColor(report.type)};
+                      background: ${getMarkerColor(report.type, report.status)};
                       border: 3px solid white;
                       box-shadow: 0 2px 6px rgba(0,0,0,0.2);
                       display: flex;
@@ -334,8 +357,10 @@ function MiniPetMap({ reports }: { reports: Report[] }) {
                       color: white;
                       font-size: 14px;
                       font-weight: bold;
+                      position: relative;
                     ">
-                      ${report.type === 'lost' ? '🔍' : '✅'}
+                      ${isResolved ? '✅' : report.type === 'lost' ? '🔍' : '🐾'}
+                      ${isResolved ? '<div style="position:absolute;top:-2px;right:-2px;width:8px;height:8px;background:#94a3b8;border-radius:50%;border:2px solid white"></div>' : ''}
                     </div>
                   `,
                   iconSize: [28, 28],
@@ -344,7 +369,7 @@ function MiniPetMap({ reports }: { reports: Report[] }) {
               >
                 <Popup minWidth={220} maxWidth={240} className="custom-popup">
                   <div className="p-0 min-w-[200px]">
-                    <div className="h-28 w-full bg-slate-100 overflow-hidden rounded-t-lg">
+                    <div className="h-28 w-full bg-slate-100 overflow-hidden rounded-t-lg relative">
                       <img 
                         src={thumbnail} 
                         alt={report.title}
@@ -353,6 +378,11 @@ function MiniPetMap({ reports }: { reports: Report[] }) {
                           (e.target as HTMLImageElement).src = PLACEHOLDER;
                         }}
                       />
+                      {isResolved && (
+                        <div className="absolute inset-0 bg-slate-900/50 flex items-center justify-center">
+                          <CheckCircle2 className="h-8 w-8 text-white" />
+                        </div>
+                      )}
                     </div>
                     
                     <div className="p-3">
@@ -361,11 +391,13 @@ function MiniPetMap({ reports }: { reports: Report[] }) {
                           {report.title}
                         </p>
                         <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                          report.type === 'lost' 
-                            ? 'bg-orange-100 text-orange-700' 
-                            : 'bg-emerald-100 text-emerald-700'
+                          isResolved 
+                            ? 'bg-slate-100 text-slate-600'
+                            : report.type === 'lost' 
+                              ? 'bg-orange-100 text-orange-700' 
+                              : 'bg-emerald-100 text-emerald-700'
                         }`}>
-                          {report.type === 'lost' ? 'หาย' : 'พบ'}
+                          {isResolved ? '✅ ปิดเคส' : report.type === 'lost' ? '🐕 หาย' : '🐾 พบ'}
                         </span>
                       </div>
                       
@@ -387,9 +419,9 @@ function MiniPetMap({ reports }: { reports: Report[] }) {
                       <Link 
                         to={`/detail/${report.id}`}
                         className="inline-flex items-center justify-center w-full mt-3 rounded-lg bg-orange-500 px-3 py-2 text-xs font-semibold text-white hover:bg-orange-600 transition"
-                        onClick={(e) => e.stopPropagation()} // ป้องกันไม่ให้คลิกลิงก์แล้วเปิดแผนที่
+                        onClick={(e) => e.stopPropagation()}
                       >
-                        ดูรายละเอียด →
+                        {isResolved ? 'ดูรายละเอียด' : 'ดูรายละเอียด →'}
                       </Link>
                     </div>
                   </div>
@@ -399,7 +431,6 @@ function MiniPetMap({ reports }: { reports: Report[] }) {
           })}
         </MapContainer>
         
-        {/* Hover Overlay: บอกว่าคลิกได้ */}
         <div className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/10 transition-colors pointer-events-none">
           <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-auto transform translate-y-2 group-hover:translate-y-0">
             <div className="bg-white/95 backdrop-blur-sm rounded-2xl px-4 py-3 shadow-xl border border-slate-200 flex items-center gap-2">
@@ -429,12 +460,16 @@ function MiniPetMap({ reports }: { reports: Report[] }) {
           <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
           <span className="text-slate-500">พบสัตว์</span>
         </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />
+          <span className="text-slate-500">ปิดเคสแล้ว</span>
+        </span>
       </div>
     </section>
   );
 }
 
-// ─── NEW: Tips for Finding Lost Pets Component ─────────────────────────────
+// ─── Tips Section ─────────────────────────────────────────────────────
 function TipsSection() {
   const tips = [
     {
@@ -535,7 +570,6 @@ function TipsSection() {
         })}
       </div>
 
-      {/* Pro Tip Banner */}
       <div className="rounded-2xl bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 p-4 sm:p-5">
         <div className="flex items-start gap-3">
           <Sparkles className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
@@ -545,6 +579,106 @@ function TipsSection() {
               สัตว์ที่หายมักไม่ไปไกล! 80% ของสัตว์เลี้ยงที่พบ กลับมาอยู่ในรัศมี 2 กิโลเมตรจากจุดสุดท้ายที่เห็น 
               <span className="font-semibold">อย่าเพิ่งท้อ และค้นหาอย่างมีระบบ</span>
             </p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ─── Three Status Guide Component (ใหม่) ──────────────────────────────────
+function ThreeStatusGuide() {
+  const statuses = [
+    {
+      icon: AlertCircle,
+      title: '🐕 สัตว์หาย',
+      description: 'คุณเป็นเจ้าของที่กำลังตามหาน้อง?',
+      action: 'แจ้งสัตว์เลี้ยงหาย',
+      link: '/report/lost',
+      color: 'orange',
+      bgColor: 'from-orange-50 to-amber-50',
+      borderColor: 'border-orange-200',
+      textColor: 'text-orange-700',
+      buttonColor: 'bg-orange-500 hover:bg-orange-600',
+    },
+    {
+      icon: HandHeart,
+      title: '🐾 พบสัตว์เร่ร่อน',
+      description: 'คุณพบน้องที่อาจกำลังหลงทาง?',
+      action: 'แจ้งพบสัตว์',
+      link: '/report/found',
+      color: 'emerald',
+      bgColor: 'from-emerald-50 to-teal-50',
+      borderColor: 'border-emerald-200',
+      textColor: 'text-emerald-700',
+      buttonColor: 'bg-emerald-500 hover:bg-emerald-600',
+    },
+    {
+      icon: Home,
+      title: '🤝 คืนสัตว์สู่เจ้าของ',
+      description: 'พบกันแล้วหรือต้องการปิดเคส?',
+      action: 'ยืนยันพบแล้ว',
+      link: '/profile',
+      color: 'slate',
+      bgColor: 'from-slate-50 to-gray-50',
+      borderColor: 'border-slate-200',
+      textColor: 'text-slate-700',
+      buttonColor: 'bg-slate-600 hover:bg-slate-700',
+    },
+  ];
+
+  return (
+    <section className="space-y-4 sm:space-y-6">
+      <div className="text-center">
+        <h2 className="text-xl sm:text-2xl font-bold text-slate-900">คุณอยู่ในสถานการณ์ไหน?</h2>
+        <p className="mt-1 text-sm text-slate-500">เลือกสถานการณ์ของคุณเพื่อเริ่มต้นช่วยเหลือ</p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        {statuses.map((status, i) => {
+          const Icon = status.icon;
+          return (
+            <motion.div
+              key={status.title}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, delay: i * 0.1 }}
+              whileHover={{ y: -4 }}
+              className={`rounded-2xl border ${status.borderColor} bg-gradient-to-br ${status.bgColor} p-6 shadow-sm hover:shadow-md transition-all`}
+            >
+              <div className={`inline-flex h-12 w-12 items-center justify-center rounded-xl bg-white shadow-sm ${status.textColor}`}>
+                <Icon className="h-6 w-6" />
+              </div>
+              <h3 className={`mt-4 text-lg font-bold ${status.textColor}`}>{status.title}</h3>
+              <p className="mt-2 text-sm text-slate-600">{status.description}</p>
+              <Link 
+                to={status.link}
+                className={`mt-4 inline-flex items-center justify-center w-full rounded-xl ${status.buttonColor} px-4 py-2.5 text-sm font-semibold text-white transition`}
+              >
+                {status.action} <ArrowRight className="ml-1 h-4 w-4" />
+              </Link>
+            </motion.div>
+          );
+        })}
+      </div>
+
+      {/* Process Flow */}
+      <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4 sm:p-6">
+        <p className="text-center text-sm font-semibold text-slate-700 mb-4">🔄 กระบวนการช่วยเหลือ</p>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 text-xs text-slate-500">
+          <div className="flex items-center gap-2">
+            <div className="h-6 w-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center font-bold">1</div>
+            <span>แจ้งเหตุ</span>
+          </div>
+          <ArrowRight className="hidden sm:block h-4 w-4 text-slate-300" />
+          <div className="flex items-center gap-2">
+            <div className="h-6 w-6 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold">2</div>
+            <span>ประสานงาน</span>
+          </div>
+          <ArrowRight className="hidden sm:block h-4 w-4 text-slate-300" />
+          <div className="flex items-center gap-2">
+            <div className="h-6 w-6 rounded-full bg-slate-100 text-slate-600 flex items-center justify-center font-bold">3</div>
+            <span>กลับบ้าน</span>
           </div>
         </div>
       </div>
@@ -572,8 +706,11 @@ export default function LandingPage({ user }: LandingPageProps) {
               <h1 className="mt-4 sm:mt-5 max-w-3xl text-3xl sm:text-4xl font-bold leading-tight tracking-tight text-slate-900">
                 ช่วยสัตว์เลี้ยงกลับบ้านอีกครั้ง
               </h1>
-              <p className="mt-3 sm:mt-5 max-w-2xl text-sm sm:text-base text-slate-600">
-                พื้นที่กลางสำหรับแจ้งสัตว์เลี้ยงหายและพบสัตว์เร่ร่อน เชื่อมต่อเจ้าของกับชุมชนคนรักสัตว์ เพื่อให้น้องๆ ได้กลับสู่อ้อมกอดเร็วที่สุด
+              <p className="mt-3 sm:mt-5 max-w-2xl text-sm sm:text-base text-slate-600 leading-relaxed">
+                พื้นที่กลางสำหรับ <span className="font-semibold text-orange-600">แจ้งสัตว์เลี้ยงหาย</span>, 
+                <span className="font-semibold text-emerald-600"> พบสัตว์เร่ร่อน</span> และ 
+                <span className="font-semibold text-slate-600">ยืนยันการคืนสัตว์สู่เจ้าของ</span> 
+                เชื่อมต่อชุมชนคนรักสัตว์เพื่อให้น้องๆ ได้กลับสู่อ้อมกอดเร็วที่สุด
               </p>
             </motion.div>
 
@@ -585,10 +722,10 @@ export default function LandingPage({ user }: LandingPageProps) {
               <Link to="/report/lost" className="rounded-2xl sm:rounded-3xl bg-orange-500 px-5 sm:px-6 py-2.5 sm:py-3 text-sm font-semibold text-white shadow-xl transition hover:bg-orange-600">
                 🐕 แจ้งสัตว์หาย
               </Link>
-              <Link to="/report/found" className="rounded-2xl sm:rounded-3xl bg-white px-5 sm:px-6 py-2.5 sm:py-3 text-sm font-semibold text-orange-700 shadow-sm transition hover:bg-orange-50">
-                🐈 พบสัตว์เร่ร่อน
+              <Link to="/report/found" className="rounded-2xl sm:rounded-3xl bg-emerald-500 px-5 sm:px-6 py-2.5 sm:py-3 text-sm font-semibold text-white shadow-xl transition hover:bg-emerald-600">
+                🐾 พบสัตว์เร่ร่อน
               </Link>
-              <Link to="/feed" className="rounded-2xl sm:rounded-3xl border border-orange-200 bg-orange-50 px-5 sm:px-6 py-2.5 sm:py-3 text-sm font-semibold text-orange-700 transition hover:bg-orange-100">
+              <Link to="/feed" className="rounded-2xl sm:rounded-3xl border border-orange-200 bg-white px-5 sm:px-6 py-2.5 sm:py-3 text-sm font-semibold text-orange-700 transition hover:bg-orange-50">
                 ดูโพสต์ทั้งหมด
               </Link>
             </motion.div>
@@ -601,6 +738,7 @@ export default function LandingPage({ user }: LandingPageProps) {
               {[
                 { label: 'ผู้ใช้ทั้งหมด', icon: Users, value: stats.users },
                 { label: 'โพสต์ทั้งหมด', icon: PawPrint, value: stats.posts },
+                { label: 'เคสสำเร็จ', icon: CheckCircle2, value: stats.resolved },
               ].map(({ label, icon: Icon, value }) => (
                 <div key={label} className="rounded-2xl bg-white/90 p-3 sm:p-4 shadow-glass text-center">
                   <Icon className="mx-auto mb-1 h-4 w-4 sm:h-5 sm:w-5 text-orange-400" />
@@ -619,61 +757,54 @@ export default function LandingPage({ user }: LandingPageProps) {
             className="relative rounded-2xl sm:rounded-[2rem] bg-white/90 p-4 sm:p-6 shadow-glass ring-1 ring-orange-100"
           >
             <div className="grid gap-4 sm:gap-5">
-              {sampleReports.slice(0, 2).map((report) => (
-                <div key={report.id} className="rounded-2xl border border-slate-200 bg-orange-50/80 p-4 shadow-sm">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <span className={`text-[10px] sm:text-xs font-semibold uppercase tracking-widest ${report.type === 'lost' ? 'text-orange-600' : 'text-green-600'}`}>
-                        {report.type === 'lost' ? '🐾 สัตว์หาย' : '🐾 พบสัตว์'}
-                      </span>
-                      <h3 className="mt-1 text-sm sm:text-base font-semibold text-slate-900">{report.title}</h3>
+              {sampleReports.slice(0, 2).map((report) => {
+                const isResolved = report.status === 'resolved';
+                return (
+                  <div key={report.id} className={`rounded-2xl border p-4 shadow-sm ${isResolved ? 'border-slate-200 bg-slate-50' : 'border-orange-200 bg-orange-50/80'}`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <span className={`text-[10px] sm:text-xs font-semibold uppercase tracking-widest ${
+                          isResolved ? 'text-slate-500' : report.type === 'lost' ? 'text-orange-600' : 'text-emerald-600'
+                        }`}>
+                          {isResolved ? '✅ ปิดเคส' : report.type === 'lost' ? '🐾 สัตว์หาย' : '🐾 พบสัตว์'}
+                        </span>
+                        <h3 className="mt-1 text-sm sm:text-base font-semibold text-slate-900">{report.title}</h3>
+                      </div>
+                      <div className="h-12 w-12 sm:h-14 sm:w-14 shrink-0 overflow-hidden rounded-xl bg-slate-100 relative">
+                        <img src={report.images[0]} alt={report.title} className="h-full w-full object-cover" />
+                        {isResolved && (
+                          <div className="absolute inset-0 bg-slate-900/30 flex items-center justify-center">
+                            <CheckCircle2 className="h-6 w-6 text-white" />
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className="h-12 w-12 sm:h-14 sm:w-14 shrink-0 overflow-hidden rounded-xl bg-slate-100">
-                      <img src={report.images[0]} alt={report.title} className="h-full w-full object-cover" />
+                    <p className="mt-2 text-xs sm:text-sm text-slate-500 line-clamp-2">{report.description}</p>
+                    <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] sm:text-xs">
+                      {[report.category, report.province, report.tags?.[0]].filter(Boolean).map((t, i) => (
+                        <span key={`${t}-${i}`} className="rounded-full bg-white px-2 py-0.5 sm:px-2.5 sm:py-1 text-slate-600">{t}</span>
+                      ))}
                     </div>
                   </div>
-                  <p className="mt-2 text-xs sm:text-sm text-slate-500 line-clamp-2">{report.description}</p>
-                  <div className="mt-3 flex flex-wrap gap-1.5 text-[10px] sm:text-xs">
-                    {[report.category, report.province, report.tags?.[0]].filter(Boolean).map((t, i) => (
-                      <span key={`${t}-${i}`} className="rounded-full bg-white px-2 py-0.5 sm:px-2.5 sm:py-1 text-slate-600">{t}</span>
-                    ))}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </motion.div>
         </div>
       </section>
 
-      {/* ✅ NOTICE BANNER: ป้ายประกาศสำคัญ */}
-      <motion.div 
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-        className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-xl shadow-sm"
-      >
-        <div className="flex items-start gap-3">
-          <Info className="h-6 w-6 text-blue-600 shrink-0 mt-0.5" />
-          <div>
-            <h3 className="font-bold text-blue-900 text-sm sm:text-base">📢 ข้อควรระวังสำหรับผู้พบสัตว์</h3>
-            <p className="text-blue-800 text-sm mt-1 leading-relaxed">
-              หากคุณพบสัตว์เลี้ยงที่สงสัยว่าเป็นของผู้อื่น <strong>กรุณาอย่าเพิ่งนำไปเลี้ยงเองหรือปล่อยทิ้งไว้</strong> 
-              แต่ให้ทำการ <Link to="/report/found" className="underline font-semibold hover:text-blue-700">แจ้งพบสัตว์</Link> ผ่านระบบของเรา 
-              หรือติดต่อเจ้าของโดยตรงผ่านหน้าโปรไฟล์ เพื่อให้การส่งต่อน้องกลับสู่ครอบครัวเป็นไปอย่างรวดเร็วและถูกต้องครับ
-            </p>
-          </div>
-        </div>
-      </motion.div>
+      {/* ✅ Three Status Guide (ใหม่) */}
+      <ThreeStatusGuide />
 
       {/* ── Sponsor Banner ── */}
       <SponsorBanner />
 
-      {/* ── How To ── */}
+      {/* ── How To (Updated) ── */}
       <section className="space-y-4 sm:space-y-6">
         <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold text-slate-900">วิธีใช้งานง่ายๆ ใน 4 ขั้นตอน</h2>
-            <p className="mt-1 text-sm text-slate-500">เริ่มต้นช่วยเหลือสัตว์เลี้ยงได้ทันที</p>
+            <p className="mt-1 text-sm text-slate-500">ตั้งแต่แจ้งเหตุจนน้องกลับบ้าน</p>
           </div>
           {!user && (
             <Link to="/auth/login" className="inline-flex items-center gap-2 rounded-2xl sm:rounded-3xl bg-orange-500 px-4 sm:px-5 py-2.5 sm:py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-orange-600">
@@ -682,26 +813,34 @@ export default function LandingPage({ user }: LandingPageProps) {
           )}
         </div>
         <div className="grid gap-3 sm:gap-4 grid-cols-2 xl:grid-cols-4">
-          {HOW_TO.map(({ icon: Icon, label, desc }, i) => (
-            <motion.div key={label} whileHover={{ y: -3 }} transition={{ type: 'spring', stiffness: 300 }}
-              className="rounded-2xl bg-white p-4 sm:p-6 shadow-glass">
-              <div className="mb-2 sm:mb-3 inline-flex h-9 w-9 sm:h-11 sm:w-11 items-center justify-center rounded-xl bg-orange-100 text-orange-600">
-                <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
-              </div>
-              <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-orange-400 mb-1">ขั้นที่ {i + 1}</p>
-              <h3 className="text-sm sm:text-base font-semibold text-slate-900">{label}</h3>
-              <p className="mt-1 text-[10px] sm:text-sm text-slate-500">{desc}</p>
-            </motion.div>
-          ))}
+          {HOW_TO.map(({ icon: Icon, label, desc, color }, i) => {
+            const colorClasses: Record<string, string> = {
+              orange: 'bg-orange-100 text-orange-600',
+              emerald: 'bg-emerald-100 text-emerald-600',
+              blue: 'bg-blue-100 text-blue-600',
+              slate: 'bg-slate-100 text-slate-600',
+            };
+            return (
+              <motion.div key={label} whileHover={{ y: -3 }} transition={{ type: 'spring', stiffness: 300 }}
+                className="rounded-2xl bg-white p-4 sm:p-6 shadow-glass">
+                <div className={`mb-2 sm:mb-3 inline-flex h-9 w-9 sm:h-11 sm:w-11 items-center justify-center rounded-xl ${colorClasses[color]}`}>
+                  <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
+                </div>
+                <p className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-orange-400 mb-1">ขั้นที่ {i + 1}</p>
+                <h3 className="text-sm sm:text-base font-semibold text-slate-900">{label}</h3>
+                <p className="mt-1 text-[10px] sm:text-sm text-slate-500">{desc}</p>
+              </motion.div>
+            );
+          })}
         </div>
       </section>
 
-      {/* ── Mini Map (แทนที่ Categories) ── */}
+      {/* ── Mini Map ── */}
       <section className="space-y-4 sm:space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-xl sm:text-2xl font-bold text-slate-900">ตำแหน่งล่าสุดบนแผนที่</h2>
-            <p className="text-sm text-slate-500">เช็กพื้นที่ที่มีการแจ้งหายหรือพบสัตว์ใกล้เคียงคุณ</p>
+            <p className="text-sm text-slate-500">เช็กพื้นที่ที่มีการแจ้งหาย พบสัตว์ หรือปิดเคสแล้ว</p>
           </div>
           <Link to="/map" className="text-sm font-semibold text-orange-500 hover:text-orange-600 flex items-center gap-1">
             ดูแผนที่เต็ม <ArrowRight size={16} />
@@ -710,7 +849,7 @@ export default function LandingPage({ user }: LandingPageProps) {
         <MiniPetMap reports={latestReports} />
       </section>
 
-      {/* ── Latest Posts (with real comment counts) ── */}
+      {/* ── Latest Posts ── */}
       <section className="space-y-4 sm:space-y-6">
         <div className="flex items-end justify-between">
           <div>
@@ -729,47 +868,65 @@ export default function LandingPage({ user }: LandingPageProps) {
           </div>
         ) : (
           <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2">
-            {latestReports.map((report) => (
-              <Link key={report.id} to={`/detail/${report.id}`}
-                className="group rounded-2xl border border-slate-100 bg-white p-4 sm:p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
-                <div className="flex items-start gap-3">
-                  {report.images?.[0] ? (
-                    <img src={report.images[0]} alt="" className="h-12 w-12 sm:h-14 sm:w-14 shrink-0 rounded-xl object-cover" />
-                  ) : (
-                    <div className="flex h-12 w-12 sm:h-14 sm:w-14 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-xl sm:text-2xl">🐾</div>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold ${
-                        report.type === 'lost' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'
-                      }`}>
-                        {report.type === 'lost' ? '🐾 สัตว์หาย' : '🐾 พบสัตว์'}
-                      </span>
-                      {report.urgent && (
-                        <span className="flex items-center gap-0.5 rounded-full bg-red-100 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold text-red-600">
-                          <AlertCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3" /> ด่วน
-                        </span>
+            {latestReports.map((report) => {
+              const isResolved = report.status === 'resolved';
+              return (
+                <Link key={report.id} to={`/detail/${report.id}`}
+                  className={`group rounded-2xl border p-4 sm:p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md ${
+                    isResolved ? 'border-slate-200 bg-slate-50' : 'border-slate-100 bg-white'
+                  }`}>
+                  <div className="flex items-start gap-3">
+                    <div className="relative h-12 w-12 sm:h-14 sm:w-14 shrink-0 rounded-xl overflow-hidden">
+                      {report.images?.[0] ? (
+                        <img src={report.images[0]} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center rounded-xl bg-orange-50 text-xl sm:text-2xl">🐾</div>
+                      )}
+                      {isResolved && (
+                        <div className="absolute inset-0 bg-slate-900/40 flex items-center justify-center">
+                          <CheckCircle2 className="h-5 w-5 text-white" />
+                        </div>
                       )}
                     </div>
-                    <h3 className="text-sm font-semibold text-slate-900 line-clamp-1 group-hover:text-orange-600 transition">
-                      {report.title}
-                    </h3>
-                    <p className="mt-0.5 text-xs text-slate-400 line-clamp-1">{report.description}</p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold ${
+                          isResolved 
+                            ? 'bg-slate-100 text-slate-600'
+                            : report.type === 'lost' ? 'bg-orange-100 text-orange-700' : 'bg-emerald-100 text-emerald-700'
+                        }`}>
+                          {isResolved ? '✅ ปิดเคส' : report.type === 'lost' ? '🐕 หาย' : '🐾 พบ'}
+                        </span>
+                        {report.urgent && !isResolved && (
+                          <span className="flex items-center gap-0.5 rounded-full bg-red-100 px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold text-red-600">
+                            <AlertCircle className="h-2.5 w-2.5 sm:h-3 sm:w-3" /> ด่วน
+                          </span>
+                        )}
+                      </div>
+                      <h3 className={`text-sm font-semibold line-clamp-1 transition ${
+                        isResolved ? 'text-slate-500' : 'text-slate-900 group-hover:text-orange-600'
+                      }`}>
+                        {report.title}
+                      </h3>
+                      <p className={`mt-0.5 text-xs line-clamp-1 ${isResolved ? 'text-slate-400' : 'text-slate-400'}`}>
+                        {report.description}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <div className="mt-3 flex items-center justify-between border-t border-slate-50 pt-2.5 text-xs text-slate-400">
-                  <div className="flex items-center gap-1">
-                    <MapPin className="h-3 w-3" />
-                    {(report as any).province || '—'}
+                  <div className="mt-3 flex items-center justify-between border-t border-slate-50 pt-2.5 text-xs text-slate-400">
+                    <div className="flex items-center gap-1">
+                      <MapPin className="h-3 w-3" />
+                      {(report as any).province || '—'}
+                    </div>
+                    <div className="flex items-center gap-2 sm:gap-3">
+                      <span className="flex items-center gap-1"><Heart className="h-3 w-3" /> {report.likesCount ?? 0}</span>
+                      <span className="flex items-center gap-1"><MessageCircle className="h-3 w-3" /> {report.commentsCount ?? 0}</span>
+                      <span className="hidden sm:flex items-center gap-1"><Clock3 className="h-3 w-3" /> {timeAgo(report.createdAt)}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    <span className="flex items-center gap-1"><Heart className="h-3 w-3" /> {report.likesCount ?? 0}</span>
-                    <span className="flex items-center gap-1"><MessageCircle className="h-3 w-3" /> {report.commentsCount ?? 0}</span>
-                    <span className="hidden sm:flex items-center gap-1"><Clock3 className="h-3 w-3" /> {timeAgo(report.createdAt)}</span>
-                  </div>
-                </div>
-              </Link>
-            ))}
+                </Link>
+              );
+            })}
           </div>
         )}
 
@@ -789,7 +946,7 @@ export default function LandingPage({ user }: LandingPageProps) {
         )}
       </section>
 
-      {/* ── NEW: Tips for Finding Lost Pets (แทนที่ Testimonials) ── */}
+      {/* ── Tips Section ── */}
       <TipsSection />
 
       {/* ── FAQ ── */}

@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { collection, onSnapshot, query, db, Timestamp } from '../firebase';
 import MapComponent from '../components/MapComponent';
@@ -106,6 +107,9 @@ interface Coords { lat: number; lng: number; }
 interface MapView { center: Coords; zoom: number; }
 interface LocationFilter { province: string; district: string; }
 
+// ✅ Type สำหรับ 3 สถานะที่ชัดเจน
+type MapTab = 'lost-active' | 'found' | 'resolved';
+
 // ─── Utils ─────────────────────────────────────────────────
 const haversineKm = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
   const R = 6371;
@@ -130,7 +134,7 @@ const formatTimeAgo = (dateString?: string): string => {
   return date.toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
-// ─── Geocode district via Nominatim (free, no key needed) ──
+// ─── Geocode district via Nominatim ──
 const geocodeDistrict = async (district: string, province: string): Promise<Coords | null> => {
   try {
     const q = encodeURIComponent(`อำเภอ${district} จังหวัด${province} ประเทศไทย`);
@@ -153,6 +157,13 @@ function ReportCard({ report, onClose, onViewDetail, onCall, onShare }: {
   const normalizedStatus = String(report.status || '').toLowerCase();
   const isResolved = normalizedStatus === 'resolved' || normalizedStatus === 'closed';
 
+  // ✅ กำหนดสีและป้ายตาม 3 สถานะ
+  const statusConfig = {
+    label: isResolved ? '✅ พบแล้ว' : report.type === 'lost' ? '🐕 หาย' : '🐾 พบ',
+    bgColor: isResolved ? 'bg-slate-500' : report.type === 'lost' ? 'bg-red-500' : 'bg-emerald-500',
+    isDisabled: isResolved,
+  };
+
   return (
     <article className="relative overflow-hidden rounded-3xl border border-white/60 bg-white/95 shadow-2xl backdrop-blur-xl">
       <button onClick={onClose} className="absolute right-3 top-3 z-10 rounded-full bg-black/10 p-2 hover:bg-black/20 transition">
@@ -162,19 +173,24 @@ function ReportCard({ report, onClose, onViewDetail, onCall, onShare }: {
         <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-2xl bg-slate-100">
           <img src={imageUrl} alt={report.title} className="h-full w-full object-cover"
             onError={(e) => { (e.target as HTMLImageElement).src = PLACEHOLDER; }} />
+          
+          {/* Urgent Badge - แสดงเฉพาะเคสที่ยังไม่ปิด */}
           {report.urgent && !isResolved && (
             <div className="absolute left-2 top-2 rounded-full bg-red-500 px-2 py-1 text-[10px] font-black text-white animate-pulse">ด่วน</div>
           )}
+          
+          {/* Resolved Overlay - แสดงเมื่อเคสปิดแล้ว */}
           {isResolved && (
-            <div className="absolute inset-0 flex items-center justify-center bg-emerald-500/20 backdrop-blur-[2px]">
-              <CheckCircle2 className="h-10 w-10 text-emerald-500 drop-shadow-lg" />
+            <div className="absolute inset-0 flex items-center justify-center bg-slate-900/30 backdrop-blur-[2px]">
+              <CheckCircle2 className="h-10 w-10 text-white drop-shadow-lg" />
             </div>
           )}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full px-2 py-1 text-[10px] font-black text-white ${isResolved ? 'bg-emerald-500' : report.type === 'lost' ? 'bg-red-500' : 'bg-emerald-500'}`}>
-              {isResolved ? '✅ พบแล้ว' : report.type === 'lost' ? '🐕 หาย' : '🐾 พบ'}
+            {/* ✅ Status Badge - สีต่างกันตามสถานะ */}
+            <span className={`rounded-full px-2 py-1 text-[10px] font-black text-white ${statusConfig.bgColor}`}>
+              {statusConfig.label}
             </span>
             {report.breed && <span className="text-[11px] text-slate-400">{report.breed}</span>}
           </div>
@@ -195,6 +211,7 @@ function ReportCard({ report, onClose, onViewDetail, onCall, onShare }: {
       </div>
       <div className="border-t border-slate-100 bg-slate-50 p-4">
         <div className="flex gap-2">
+          {/* ปุ่มติดต่อ - ซ่อนเมื่อเคสปิดแล้ว */}
           {report.contactPhone && !isResolved && (
             <button onClick={() => onCall(report.contactPhone)} className="flex-1 rounded-xl border border-slate-200 bg-white py-2 text-sm font-bold text-slate-700 hover:border-orange-400 hover:text-orange-500 transition">
               <Phone size={14} className="mr-1 inline" />ติดต่อ
@@ -203,10 +220,13 @@ function ReportCard({ report, onClose, onViewDetail, onCall, onShare }: {
           <button onClick={() => onShare(report)} className="rounded-xl border border-slate-200 bg-white px-3 hover:border-orange-400 hover:text-orange-500 transition">
             <Share2 size={15} />
           </button>
-          <button onClick={() => !isResolved && onViewDetail(report.id)}
-            className={`flex-[2] rounded-xl py-2 text-sm font-black text-white transition ${isResolved ? 'bg-slate-400 cursor-not-allowed' : 'bg-orange-500 hover:bg-orange-600'}`}
-            disabled={isResolved}>
-            {isResolved ? 'ปิดเคสแล้ว' : 'ดูรายละเอียด'}
+          <button onClick={() => !statusConfig.isDisabled && onViewDetail(report.id)}
+            className={`flex-[2] rounded-xl py-2 text-sm font-black text-white transition ${
+              statusConfig.isDisabled ? 'bg-slate-400 cursor-not-allowed' : 'bg-orange-500 hover:bg-orange-600'
+            }`}
+            disabled={statusConfig.isDisabled}
+          >
+            {statusConfig.isDisabled ? 'ปิดเคสแล้ว' : 'ดูรายละเอียด'}
           </button>
         </div>
       </div>
@@ -218,7 +238,9 @@ function ReportCard({ report, onClose, onViewDetail, onCall, onShare }: {
 export default function MapPage({ user }: MapPageProps) {
   const [reports, setReports] = useState<Report[]>([]);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'lost' | 'found'>('lost');
+  
+  // ✅ เปลี่ยนจาก 2 แท็บ เป็น 3 แท็บที่ชัดเจน
+  const [tab, setTab] = useState<MapTab>('lost-active');
   const [rangeFilter, setRangeFilter] = useState<'all' | 'near'>('all');
   const [myCoords, setMyCoords] = useState<Coords | null>(null);
   const [geoTracking, setGeoTracking] = useState(false);
@@ -265,14 +287,13 @@ export default function MapPage({ user }: MapPageProps) {
     }
     const c = PROVINCE_COORDS[locationFilter.province];
     if (c) setMapView({ center: { lat: c.lat, lng: c.lng }, zoom: c.zoom });
-  }, [locationFilter.province]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [locationFilter.province]);
 
-  // ─── Zoom when district changes (debounced geocode) ───────
+  // ─── Zoom when district changes ───────
   useEffect(() => {
     if (districtTimer.current) clearTimeout(districtTimer.current);
 
     if (!locationFilter.district) {
-      // fallback to province zoom
       if (locationFilter.province) {
         const c = PROVINCE_COORDS[locationFilter.province];
         if (c) setMapView({ center: { lat: c.lat, lng: c.lng }, zoom: c.zoom });
@@ -286,7 +307,7 @@ export default function MapPage({ user }: MapPageProps) {
     }, 700);
 
     return () => { if (districtTimer.current) clearTimeout(districtTimer.current); };
-  }, [locationFilter.district]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [locationFilter.district]);
 
   // ─── Firestore ──────────────────────────────────────────
   useEffect(() => {
@@ -308,10 +329,11 @@ export default function MapPage({ user }: MapPageProps) {
           ? raw.createdAt.toDate().toISOString()
           : raw.createdAt || new Date().toISOString();
         return { id: docSnap.id, ...raw, lat, lng, type: normalizedType, status: normalizedStatus, createdAt } as Report;
-      }).filter((r) => {
+      })
+      // ✅ ฟิลเตอร์พื้นฐาน: รับเฉพาะสัตว์เลี้ยงที่มีพิกัดและประเภทถูกต้อง
+      .filter((r) => {
         if (!r.lat || !r.lng || r.lat === 0 || r.lng === 0) return false;
         if (r.type !== 'lost' && r.type !== 'found') return false;
-        if (r.type === 'lost') return r.status === 'active' || r.status === 'resolved';
         return true;
       });
       setReports(data);
@@ -323,24 +345,42 @@ export default function MapPage({ user }: MapPageProps) {
     return () => unsubscribe();
   }, []);
 
-  // ─── Filtered Reports ────────────────────────────────────
+  // ─── Filtered Reports (แยก 3 สถานะชัดเจน) ─────────────────
   const filteredReports = useMemo(() => {
-    let data = reports.filter((r) => r.type === tab);
+    let data = reports;
+    
+    // ✅ ฟิลเตอร์ตามแท็บ 3 สถานะ
+    if (tab === 'lost-active') {
+      // 🐕 สัตว์หายที่ยังติดตามอยู่ (type: lost + status: active)
+      data = data.filter((r) => r.type === 'lost' && r.status === 'active');
+    } else if (tab === 'found') {
+  data = data.filter((r) => r.type === 'found' && r.status === 'active');
+    } else if (tab === 'resolved') {
+      // ✅ ปิดเคสแล้ว (ทุกประเภทที่สถานะเป็น resolved/closed)
+      data = data.filter((r) => r.status === 'resolved' || r.status === 'closed');
+    }
+    
+    // ✅ ฟิลเตอร์ตามจังหวัด/อำเภอ
     if (locationFilter.province) {
       data = data.filter((r) => (r.province || '').toLowerCase().includes(locationFilter.province.toLowerCase()));
     }
     if (locationFilter.district) {
       data = data.filter((r) => (r.district || '').toLowerCase().includes(locationFilter.district.toLowerCase()));
     }
+    
+    // ✅ ฟิลเตอร์ตามระยะทาง
     if (rangeFilter === 'near' && myCoords) {
       data = data.filter((r) => r.lat && r.lng && haversineKm(myCoords.lat, myCoords.lng, r.lat, r.lng) <= NEAR_RADIUS_KM);
     }
+    
     return data;
   }, [reports, tab, rangeFilter, myCoords, locationFilter]);
 
-  // ─── Counts ─────────────────────────────────────────────
-  const lostCount = reports.filter((r) => r.type === 'lost' && r.status === 'active').length;
-  const foundCount = reports.filter((r) => r.type === 'found').length;
+  // ─── Counts (นับแยกตามแท็บ) ──────────────────────────────
+  const lostActiveCount = reports.filter((r) => r.type === 'lost' && r.status === 'active').length;
+  const foundCount = reports.filter((r) => r.type === 'found' && r.status === 'active').length;
+  const resolvedCount = reports.filter((r) => r.status === 'resolved' || r.status === 'closed').length;
+  
   const activeFiltersCount = useMemo(() => {
     let count = 0;
     if (locationFilter.province) count++;
@@ -376,6 +416,14 @@ export default function MapPage({ user }: MapPageProps) {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
+  // ✅ Helper: ได้สีหมุดตามสถานะ
+  const getMarkerColor = (report: Report) => {
+    const isResolved = report.status === 'resolved' || report.status === 'closed';
+    if (isResolved) return '#94a3b8'; // เทา
+    if (report.type === 'lost') return '#f97316'; // ส้ม
+    return '#10b981'; // เขียว
+  };
+
   return (
     <main className="relative h-[calc(100vh-56px)] overflow-hidden bg-slate-100">
 
@@ -389,6 +437,7 @@ export default function MapPage({ user }: MapPageProps) {
           selectedReport={selectedReport}
           userCoords={myCoords}
           onMarkerClick={handleMarkerClick}
+          getMarkerColor={getMarkerColor}
         />
       </div>
 
@@ -415,41 +464,62 @@ export default function MapPage({ user }: MapPageProps) {
 
           <div className="h-px bg-slate-100 mx-4" />
 
-          {/* Tabs + Near Me */}
-          <div className="flex items-center gap-2 px-4 py-3">
-            <div className="flex flex-1 rounded-2xl bg-slate-100 p-1">
-              <button
-                onClick={() => setTab('lost')}
-                className={`flex-1 rounded-xl py-2 text-xs font-black transition-all ${tab === 'lost' ? 'bg-red-500 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}
-              >
-                🐕 หาย ({lostCount})
-              </button>
-              <button
-                onClick={() => setTab('found')}
-                className={`flex-1 rounded-xl py-2 text-xs font-black transition-all ${tab === 'found' ? 'bg-emerald-500 text-white shadow-sm' : 'text-slate-500 hover:bg-slate-200'}`}
-              >
-                🐾 พบ ({foundCount})
-              </button>
-            </div>
+          {/* ✅ Tabs 3 สถานะชัดเจน */}
+          <div className="flex items-center gap-1.5 px-4 py-2">
             <button
-              onClick={() => setRangeFilter(rangeFilter === 'near' ? 'all' : 'near')}
-              disabled={geoTracking}
-              className={`flex items-center gap-1.5 rounded-2xl px-3 py-2 text-xs font-black transition-all ${rangeFilter === 'near' ? 'bg-orange-500 text-white shadow-sm' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}
+              onClick={() => setTab('lost-active')}
+              className={`flex-1 rounded-xl py-2 text-xs font-black transition-all flex items-center justify-center gap-1 ${
+                tab === 'lost-active' 
+                  ? 'bg-red-500 text-white shadow-sm' 
+                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+              }`}
             >
-              {geoTracking ? <Loader2 size={13} className="animate-spin" /> : <LocateFixed size={13} />}
-              ใกล้ฉัน
+              🐕 หาย ({lostActiveCount})
+            </button>
+            <button
+              onClick={() => setTab('found')}
+              className={`flex-1 rounded-xl py-2 text-xs font-black transition-all flex items-center justify-center gap-1 ${
+                tab === 'found' 
+                  ? 'bg-emerald-500 text-white shadow-sm' 
+                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+              }`}
+            >
+              🐾 พบ ({foundCount})
+            </button>
+            <button
+              onClick={() => setTab('resolved')}
+              className={`flex-1 rounded-xl py-2 text-xs font-black transition-all flex items-center justify-center gap-1 ${
+                tab === 'resolved' 
+                  ? 'bg-slate-500 text-white shadow-sm' 
+                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+              }`}
+            >
+              ✅ ปิดเคส ({resolvedCount})
             </button>
           </div>
 
           <div className="h-px bg-slate-100 mx-4" />
 
-          {/* Province + District */}
-          <div className="grid grid-cols-2 gap-2 px-4 py-3">
-            <div className="relative">
+          {/* Near Me + Location Filter */}
+          <div className="flex items-center gap-2 px-4 py-3">
+            <button
+              onClick={() => setRangeFilter(rangeFilter === 'near' ? 'all' : 'near')}
+              disabled={geoTracking}
+              className={`flex items-center gap-1.5 rounded-2xl px-3 py-2 text-xs font-black transition-all ${
+                rangeFilter === 'near' 
+                  ? 'bg-orange-500 text-white shadow-sm' 
+                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+              }`}
+            >
+              {geoTracking ? <Loader2 size={13} className="animate-spin" /> : <LocateFixed size={13} />}
+              ใกล้ฉัน
+            </button>
+            
+            <div className="flex-1 relative">
               <select
                 value={locationFilter.province}
                 onChange={(e) => setLocationFilter({ province: e.target.value, district: '' })}
-                className={`w-full appearance-none rounded-xl border px-3 py-2.5 pr-8 text-xs font-medium outline-none transition-all ${
+                className={`w-full appearance-none rounded-xl border px-3 py-2 pr-8 text-xs font-medium outline-none transition-all ${
                   locationFilter.province
                     ? 'border-orange-400 bg-orange-50 text-orange-700'
                     : 'border-slate-200 bg-slate-50 text-slate-500'
@@ -460,18 +530,22 @@ export default function MapPage({ user }: MapPageProps) {
               </select>
               <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
             </div>
+          </div>
 
+          {/* District Input */}
+          <div className="px-4 pb-3">
             <div className="relative">
               <input
                 type="text"
                 value={locationFilter.district}
                 onChange={(e) => setLocationFilter((prev) => ({ ...prev, district: e.target.value }))}
-                placeholder="อำเภอ / เขต"
+                placeholder="อำเภอ / เขต (เลือกจังหวัดก่อน)"
+                disabled={!locationFilter.province}
                 className={`w-full rounded-xl border px-3 py-2.5 text-xs font-medium outline-none transition-all ${
                   locationFilter.district
                     ? 'border-orange-400 bg-orange-50 text-orange-700 placeholder-orange-300'
                     : 'border-slate-200 bg-slate-50 text-slate-600 placeholder-slate-400'
-                } focus:border-orange-500 focus:ring-2 focus:ring-orange-100`}
+                } focus:border-orange-500 focus:ring-2 focus:ring-orange-100 disabled:opacity-50 disabled:cursor-not-allowed`}
               />
               {locationFilter.district && (
                 <button
@@ -538,7 +612,9 @@ export default function MapPage({ user }: MapPageProps) {
             </div>
             <h2 className="mt-4 text-lg font-black text-slate-700">ไม่พบข้อมูล</h2>
             <p className="mt-2 text-sm text-slate-400 max-w-xs">
-              {tab === 'found' ? 'ยังไม่มีผู้แจ้งพบสัตว์ในพื้นที่นี้' : 'ยังไม่มีรายงานสัตว์หายในพื้นที่นี้'}
+              {tab === 'lost-active' && 'ยังไม่มีรายงานสัตว์หายที่ยังติดตามอยู่ในพื้นที่นี้'}
+              {tab === 'found' && 'ยังไม่มีผู้แจ้งพบสัตว์ในพื้นที่นี้'}
+              {tab === 'resolved' && 'ยังไม่มีเคสที่ปิดแล้วในพื้นที่นี้'}
             </p>
             {activeFiltersCount > 0 && (
               <button onClick={handleClearFilters} className="mt-4 rounded-xl bg-orange-50 px-4 py-2 text-xs font-semibold text-orange-500 hover:bg-orange-100 transition">

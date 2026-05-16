@@ -12,10 +12,11 @@ interface MapComponentProps {
   reports: Report[];
   height?: string;
   zoom?: number;
-  center?: Coords | null;       // ✅ เพิ่ม: ให้ MapPage ควบคุม center
+  center?: Coords | null;
   selectedReport?: Report | null;
   userCoords?: Coords | null;
   onMarkerClick?: (report: Report) => void;
+  getMarkerColor?: (report: Report) => string; // ✅ เพิ่ม
 }
 
 const PLACEHOLDER =
@@ -29,6 +30,7 @@ export default function MapComponent({
   selectedReport,
   userCoords,
   onMarkerClick,
+  getMarkerColor, // ✅ เพิ่ม
 }: MapComponentProps) {
   const mapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.Marker[]>([]);
@@ -57,7 +59,7 @@ export default function MapComponent({
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─────────────────────────────────────────────
-  // FLY TO CENTER + ZOOM  (province / district filter)
+  // FLY TO CENTER + ZOOM
   // ─────────────────────────────────────────────
   useEffect(() => {
     if (!mapRef.current) return;
@@ -67,7 +69,6 @@ export default function MapComponent({
         duration: 0.8,
       });
     } else {
-      // ไม่มี center = reset → ซูมออกดู Thailand overview
       mapRef.current.flyTo([13.0, 101.5], zoom, {
         animate: true,
         duration: 0.8,
@@ -124,17 +125,26 @@ export default function MapComponent({
       if (typeof report.lat !== 'number' || typeof report.lng !== 'number') return;
 
       const imageUrl = report.images?.[0] || PLACEHOLDER;
+      const isResolved = report.status === 'resolved' || report.status === 'closed';
+
+      // ✅ ใช้ getMarkerColor ถ้ามี ไม่งั้น fallback ตาม type
+      const badgeColor = getMarkerColor
+        ? getMarkerColor(report)
+        : report.type === 'lost' ? '#ef4444' : '#10b981';
+
+      const ringClass = isResolved
+        ? 'ring-4 ring-slate-400/30'
+        : report.type === 'lost'
+          ? 'ring-4 ring-red-400/30'
+          : 'ring-4 ring-emerald-400/30';
+
+      const badgeLabel = isResolved ? '✅' : report.type === 'lost' ? 'หาย' : 'พบ';
 
       const icon = L.divIcon({
         className: 'custom-marker-wrapper',
         html: `
           <div class="group relative cursor-pointer">
-            <div class="
-              w-14 h-14 rounded-full overflow-hidden
-              border-4 border-white shadow-xl
-              transition-transform duration-200 hover:scale-110
-              ${report.type === 'lost' ? 'ring-4 ring-red-400/30' : 'ring-4 ring-emerald-400/30'}
-            ">
+            <div class="w-14 h-14 rounded-full overflow-hidden border-4 border-white shadow-xl transition-transform duration-200 hover:scale-110 ${ringClass}">
               <img
                 src="${imageUrl}"
                 alt="${report.title}"
@@ -142,12 +152,9 @@ export default function MapComponent({
                 onerror="this.src='${PLACEHOLDER}'"
               />
             </div>
-            <div class="
-              absolute -bottom-1 left-1/2 -translate-x-1/2
-              rounded-full px-2 py-0.5 text-[10px] font-black text-white shadow
-              ${report.type === 'lost' ? 'bg-red-500' : 'bg-emerald-500'}
-            ">
-              ${report.type === 'lost' ? 'หาย' : 'พบ'}
+            <div class="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded-full px-2 py-0.5 text-[10px] font-black text-white shadow"
+              style="background-color: ${badgeColor}">
+              ${badgeLabel}
             </div>
           </div>
         `,
@@ -163,6 +170,9 @@ export default function MapComponent({
         mapRef.current?.flyTo([report.lat, report.lng], 14, { animate: true, duration: 0.8 });
       });
 
+      const popupBadgeColor = isResolved ? '#64748b' : report.type === 'lost' ? '#ef4444' : '#10b981';
+      const popupLabel = isResolved ? '✅ พบแล้ว' : report.type === 'lost' ? '🐕 สัตว์หาย' : '🐾 พบสัตว์';
+
       marker.bindPopup(
         `
           <div class="w-[220px] overflow-hidden rounded-2xl">
@@ -171,10 +181,10 @@ export default function MapComponent({
             </div>
             <div class="p-2">
               <div class="flex items-center gap-2 mb-1">
-                <span class="rounded-full px-2 py-0.5 text-[10px] font-black text-white ${report.type === 'lost' ? 'bg-red-500' : 'bg-emerald-500'}">
-                  ${report.type === 'lost' ? '🐕 สัตว์หาย' : '🐾 พบสัตว์'}
+                <span class="rounded-full px-2 py-0.5 text-[10px] font-black text-white" style="background-color: ${popupBadgeColor}">
+                  ${popupLabel}
                 </span>
-                ${report.urgent ? `<span class="rounded-full bg-yellow-400 px-2 py-0.5 text-[10px] font-black text-black">ด่วน</span>` : ''}
+                ${report.urgent && !isResolved ? `<span class="rounded-full bg-yellow-400 px-2 py-0.5 text-[10px] font-black text-black">ด่วน</span>` : ''}
               </div>
               <p class="font-black text-slate-800 text-sm line-clamp-1">${report.title}</p>
               <p class="mt-1 text-xs text-slate-500 line-clamp-2">${report.description || '-'}</p>
