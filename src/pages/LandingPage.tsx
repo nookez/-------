@@ -8,7 +8,7 @@ import {
   Clock3, AlertCircle, Loader2, Search, PawPrint, CheckCircle2,
   Bell, Users, Megaphone, QrCode, Copy, Check, Navigation,
   Lightbulb, Volume2, Flashlight, MapPinned, PhoneCall, Camera,
-  Sparkles, Target, Timer, Share2,
+  Sparkles, Target, Timer, Share2, Info, ShieldCheck
 } from 'lucide-react';
 import type { User } from 'firebase/auth';
 import {
@@ -90,7 +90,7 @@ function useStats() {
       try {
         const [usersSnap, resolvedSnap, postsSnap] = await Promise.all([
           getCountFromServer(collection(db, 'users')),
-          getCountFromServer(query(collection(db, 'reports'), where('resolved', '==', true))),
+          getCountFromServer(query(collection(db, 'reports'), where('status', '==', 'resolved'))), // แก้ไขให้ตรงกับ field status
           getCountFromServer(collection(db, 'reports')),
         ]);
         setStats({
@@ -210,9 +210,9 @@ function DonationSection() {
           </div>
           <h2 className="text-2xl font-bold text-slate-900">ช่วยให้เว็บไซต์เดินต่อได้</h2>
           <p className="text-sm text-slate-600 leading-relaxed">
-            เว็บไซต์นี้ทำขึ้นเพื่อช่วยเหลือสัตว์เลี้ยงที่หายและเจ้าของที่กำลังตามหา
-            การโดเนทของคุณจะนำไปใช้ <span className="font-semibold text-green-700">พัฒนาระบบ ดูแลเซิร์ฟเวอร์</span> และเป็น
-            <span className="font-semibold text-green-700"> ค่าขนมผู้พัฒนา</span> เพื่อให้แพลตฟอร์มนี้ฟรีสำหรับทุกคนตลอดไป 🐾
+            เว็บไซต์นี้พัฒนาขึ้นด้วยความตั้งใจที่จะช่วยเหลือสัตว์เลี้ยงและเจ้าของ
+            เงินบริจาคทุกบาทจะนำไปใช้ <span className="font-semibold text-green-700">ค่าเซิร์ฟเวอร์และพัฒนาระบบ</span> 
+            เพื่อให้แพลตฟอร์มนี้ฟรีและใช้งานได้ตลอดไป 🐾
           </p>
           <p className="text-xs text-slate-400">ไม่มีขั้นต่ำ โอนได้ตามกำลังใจ ขอบคุณมากๆ ครับ/ค่ะ</p>
         </div>
@@ -573,7 +573,7 @@ export default function LandingPage({ user }: LandingPageProps) {
                 ช่วยสัตว์เลี้ยงกลับบ้านอีกครั้ง
               </h1>
               <p className="mt-3 sm:mt-5 max-w-2xl text-sm sm:text-base text-slate-600">
-                แจ้งสัตว์เลี้ยงหายหรือพบสัตว์เร่ร่อนในชุมชนไทย เชื่อมต่อเจ้าของกับสัตว์เลี้ยงที่พลัดพรากได้ง่ายขึ้น
+                พื้นที่กลางสำหรับแจ้งสัตว์เลี้ยงหายและพบสัตว์เร่ร่อน เชื่อมต่อเจ้าของกับชุมชนคนรักสัตว์ เพื่อให้น้องๆ ได้กลับสู่อ้อมกอดเร็วที่สุด
               </p>
             </motion.div>
 
@@ -645,6 +645,26 @@ export default function LandingPage({ user }: LandingPageProps) {
         </div>
       </section>
 
+      {/* ✅ NOTICE BANNER: ป้ายประกาศสำคัญ */}
+      <motion.div 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-xl shadow-sm"
+      >
+        <div className="flex items-start gap-3">
+          <Info className="h-6 w-6 text-blue-600 shrink-0 mt-0.5" />
+          <div>
+            <h3 className="font-bold text-blue-900 text-sm sm:text-base">📢 ข้อควรระวังสำหรับผู้พบสัตว์</h3>
+            <p className="text-blue-800 text-sm mt-1 leading-relaxed">
+              หากคุณพบสัตว์เลี้ยงที่สงสัยว่าเป็นของผู้อื่น <strong>กรุณาอย่าเพิ่งนำไปเลี้ยงเองหรือปล่อยทิ้งไว้</strong> 
+              แต่ให้ทำการ <Link to="/report/found" className="underline font-semibold hover:text-blue-700">แจ้งพบสัตว์</Link> ผ่านระบบของเรา 
+              หรือติดต่อเจ้าของโดยตรงผ่านหน้าโปรไฟล์ เพื่อให้การส่งต่อน้องกลับสู่ครอบครัวเป็นไปอย่างรวดเร็วและถูกต้องครับ
+            </p>
+          </div>
+        </div>
+      </motion.div>
+
       {/* ── Sponsor Banner ── */}
       <SponsorBanner />
 
@@ -652,8 +672,8 @@ export default function LandingPage({ user }: LandingPageProps) {
       <section className="space-y-4 sm:space-y-6">
         <div className="flex flex-col gap-3 sm:gap-4 md:flex-row md:items-end md:justify-between">
           <div>
-            <h2 className="text-xl sm:text-2xl font-bold text-slate-900">วิธีใช้งาน</h2>
-            <p className="mt-1 text-sm text-slate-500">4 ขั้นตอนง่ายๆ เริ่มได้เลยตอนนี้</p>
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900">วิธีใช้งานง่ายๆ ใน 4 ขั้นตอน</h2>
+            <p className="mt-1 text-sm text-slate-500">เริ่มต้นช่วยเหลือสัตว์เลี้ยงได้ทันที</p>
           </div>
           {!user && (
             <Link to="/auth/login" className="inline-flex items-center gap-2 rounded-2xl sm:rounded-3xl bg-orange-500 px-4 sm:px-5 py-2.5 sm:py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-orange-600">
@@ -679,9 +699,12 @@ export default function LandingPage({ user }: LandingPageProps) {
       {/* ── Mini Map (แทนที่ Categories) ── */}
       <section className="space-y-4 sm:space-y-6">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-900">ตำแหน่งล่าสุด</h2>
-          <Link to="/map" className="text-sm font-semibold text-orange-500 hover:text-orange-600">
-            ดูแผนที่เต็ม →
+          <div>
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900">ตำแหน่งล่าสุดบนแผนที่</h2>
+            <p className="text-sm text-slate-500">เช็กพื้นที่ที่มีการแจ้งหายหรือพบสัตว์ใกล้เคียงคุณ</p>
+          </div>
+          <Link to="/map" className="text-sm font-semibold text-orange-500 hover:text-orange-600 flex items-center gap-1">
+            ดูแผนที่เต็ม <ArrowRight size={16} />
           </Link>
         </div>
         <MiniPetMap reports={latestReports} />
@@ -691,8 +714,8 @@ export default function LandingPage({ user }: LandingPageProps) {
       <section className="space-y-4 sm:space-y-6">
         <div className="flex items-end justify-between">
           <div>
-            <h2 className="text-xl sm:text-2xl font-bold text-slate-900">โพสต์ล่าสุด</h2>
-            <p className="mt-1 text-sm text-slate-500">อัปเดตแบบ real-time จากชุมชนทั่วไทย</p>
+            <h2 className="text-xl sm:text-2xl font-bold text-slate-900">โพสต์ล่าสุดจากชุมชน</h2>
+            <p className="mt-1 text-sm text-slate-500">อัปเดตแบบ Real-time ทั่วประเทศไทย</p>
           </div>
           <Link to="/feed" className="rounded-2xl bg-orange-500 px-4 sm:px-5 py-2 sm:py-2.5 text-sm font-semibold text-white transition hover:bg-orange-600">
             ดูทั้งหมด
@@ -753,7 +776,7 @@ export default function LandingPage({ user }: LandingPageProps) {
         {!user && (
           <div className="rounded-2xl bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-100 p-6 sm:p-8 text-center">
             <p className="font-semibold text-slate-800">เข้าร่วมชุมชนเพื่อแจ้งและติดตามสัตว์เลี้ยงที่หาย</p>
-            <p className="mt-1 text-sm text-slate-500">ฟรี ไม่มีค่าใช้จ่าย</p>
+            <p className="mt-1 text-sm text-slate-500">ฟรี ไม่มีค่าใช้จ่าย ปลอดภัยและรวดเร็ว</p>
             <div className="mt-4 flex justify-center gap-3">
               <Link to="/auth/register" className="rounded-2xl bg-orange-500 px-5 sm:px-6 py-2.5 sm:py-3 text-sm font-semibold text-white transition hover:bg-orange-600">
                 สมัครสมาชิก
