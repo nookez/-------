@@ -51,7 +51,7 @@ const ImageGallery = ({ images, title }: { images?: string[]; title: string }) =
   
   if (!images || images.length === 0) {
     return (
-      <div className="aspect-video rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center">
+      <div className="rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center py-16">
         <ImageIcon className="h-12 w-12 text-slate-300" />
       </div>
     );
@@ -59,8 +59,13 @@ const ImageGallery = ({ images, title }: { images?: string[]; title: string }) =
 
   return (
     <div className="space-y-3">
-      <div className="aspect-video rounded-2xl bg-slate-50 border border-slate-200 overflow-hidden">
-        <img src={images[activeIndex]} alt={title} className="h-full w-full object-cover" />
+      {/* Main image: object-contain so the full image shows, no cropping */}
+      <div className="rounded-2xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center min-h-[200px]">
+        <img
+          src={images[activeIndex]}
+          alt={title}
+          className="max-h-[480px] w-full object-contain"
+        />
       </div>
       {images.length > 1 && (
         <div className="flex gap-2 overflow-x-auto pb-1">
@@ -68,13 +73,13 @@ const ImageGallery = ({ images, title }: { images?: string[]; title: string }) =
             <button
               key={idx}
               onClick={() => setActiveIndex(idx)}
-              className={`shrink-0 h-16 w-16 rounded-xl border-2 overflow-hidden transition-all ${
+              className={`shrink-0 h-16 w-16 rounded-xl border-2 overflow-hidden transition-all bg-slate-100 flex items-center justify-center ${
                 activeIndex === idx 
                   ? 'border-orange-500 ring-2 ring-orange-100' 
                   : 'border-slate-200 hover:border-slate-300'
               }`}
             >
-              <img src={img} alt="" className="h-full w-full object-cover" />
+              <img src={img} alt="" className="max-h-full max-w-full object-contain" />
             </button>
           ))}
         </div>
@@ -312,7 +317,7 @@ export default function DetailPage({ user }: DetailPageProps) {
               {report.title}
             </h1>
 
-            {/* Meta Info - ใช้ฟิลด์ที่มีใน Report interface */}
+            {/* Meta Info */}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-500">
               <span className="inline-flex items-center gap-1.5" title="จังหวัดที่พบหรือหาย">
                 <MapPin className="h-4 w-4 text-orange-500" />
@@ -330,7 +335,7 @@ export default function DetailPage({ user }: DetailPageProps) {
               </span>
             </div>
 
-            {/* Stats - ใช้ฟิลด์ที่มีใน Report interface */}
+            {/* Stats */}
             <div className="flex items-center gap-4 pt-1">
               <StatBadge icon={Eye} label="จำนวนการดู" value={report.viewsCount || 0} />
               <StatBadge icon={Heart} label="จำนวนถูกใจ" value={report.likesCount || 0} />
@@ -383,7 +388,7 @@ export default function DetailPage({ user }: DetailPageProps) {
             </div>
           </section>
 
-          {/* Attributes Grid - ใช้ฟิลด์ที่มีใน Report interface */}
+          {/* Attributes Grid */}
           {hasAttributes && (
             <section className="rounded-2xl bg-white border border-slate-200 p-5">
               <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">ลักษณะสัตว์เลี้ยง</h2>
@@ -424,7 +429,7 @@ export default function DetailPage({ user }: DetailPageProps) {
             </section>
           )}
 
-          {/* Date & Location Details - ใช้ฟิลด์ที่มีใน Report interface */}
+          {/* Date & Location Details */}
           <section className="rounded-2xl bg-white border border-slate-200 p-5">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">เวลาและสถานที่</h2>
             <div className="space-y-1">
@@ -458,7 +463,7 @@ export default function DetailPage({ user }: DetailPageProps) {
             </div>
           </section>
 
-          {/* Tags - ใช้ฟิลด์ที่มีใน Report interface */}
+          {/* Tags */}
           {report.tags && report.tags.length > 0 && (
             <section className="rounded-2xl bg-white border border-slate-200 p-5">
               <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">แท็ก</h2>
@@ -480,7 +485,7 @@ export default function DetailPage({ user }: DetailPageProps) {
         {/* Right Column: Contact + Map + Reward */}
         <div className="space-y-6">
           
-          {/* Contact Information - ใช้ฟิลด์ที่มีใน Report interface */}
+          {/* Contact Information */}
           {hasContact && (
             <section className="rounded-2xl bg-white border border-slate-200 p-5">
               <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">ช่องทางการติดต่อ</h2>
@@ -550,7 +555,7 @@ export default function DetailPage({ user }: DetailPageProps) {
             )}
           </section>
 
-          {/* Reward - ใช้ฟิลด์ที่มีใน Report interface */}
+          {/* Reward */}
           {report.reward && (
             <section className="rounded-2xl bg-orange-50 border border-orange-200 p-5">
               <div className="flex items-center gap-2 text-orange-700 mb-3">
@@ -564,7 +569,7 @@ export default function DetailPage({ user }: DetailPageProps) {
             </section>
           )}
 
-          {/* Reporter Info - ใช้ฟิลด์ที่มีใน Report.user */}
+          {/* Reporter Info */}
           {report.user && (
             <section className="rounded-2xl bg-white border border-slate-200 p-5">
               <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">ผู้แจ้งรายงาน</h2>
@@ -605,9 +610,8 @@ export default function DetailPage({ user }: DetailPageProps) {
         </div>
       </div>
 
-      {/* ── Comments Section (Placeholder) ─────────────────────────────── */}
-   {/* ── Comments Section (Real-time) ─────────────────────────────── */}
-<CommentsSection reportId={report.id} user={user} />
+      {/* ── Comments Section ─────────────────────────────── */}
+      <CommentsSection reportId={report.id} user={user} />
 
       {/* ── Fixed Bottom Bar (Mobile) ─────────────────────────────────── */}
       {report.contactPhone && (
