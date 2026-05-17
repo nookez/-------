@@ -10,7 +10,7 @@ import {
   limit, getDocs, startAfter, getCountFromServer,
 } from '../firebase';
 import type { User } from 'firebase/auth';
-import { sampleReports } from '../data';
+
 import type { Report } from '../types';
 
 interface HomeFeedPageProps {
@@ -68,18 +68,19 @@ const SLATE = {
 
 // ─── Sub-Components ─────────────────────────────────────────────────────────
 
-// 🎴 Minimalist Card Component (with Subtle Comment Button)
-const AnimalCard = ({ report }: { report: Report & { likedBy?: string[]; realCommentCount?: number } }) => {
+// 🎴 Minimalist Card Component
+const AnimalCard = ({ report }: { report: Report & { likedBy?: string[]; realCommentCount?: number; compensation?: string | null; compensationAmount?: number | null } }) => {
   const hasImage = report.images?.[0];
   const isLost = report.type === 'lost';
   const commentCount = report.realCommentCount ?? report.commentsCount ?? 0;
-  
+  const hasReward = report.compensation && report.compensationAmount && report.compensationAmount > 0;
+
   return (
     <Link 
       to={`/detail/${report.id}`}
       className="group relative flex flex-col rounded-2xl bg-white border border-slate-200 overflow-hidden shadow-sm hover:shadow-lg hover:border-orange-200/50 transition-all duration-300"
     >
-      {/* Image Section */}
+      {/* Image Section — ไม่มี badge ทับรูปเลย */}
       <div className="relative h-40 bg-slate-50 overflow-hidden">
         {hasImage ? (
           <img
@@ -94,39 +95,45 @@ const AnimalCard = ({ report }: { report: Report & { likedBy?: string[]; realCom
             <PawPrint className="h-10 w-10 text-slate-300" />
           </div>
         )}
+      </div>
 
-        {/* Status Badge - Top Left */}
-        <div className="absolute top-3 left-3">
-          <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold shadow-sm ${
-            isLost ? 'bg-white text-slate-700 border border-slate-200' : 'bg-white text-slate-700 border border-slate-200'
-          }`}>
-            <span className={`h-2 w-2 rounded-full ${isLost ? 'bg-orange-500' : 'bg-slate-400'}`} />
-            {isLost ? 'สัตว์หาย' : 'พบสัตว์'}
+      {/* Reward Banner */}
+      {hasReward && (
+        <div className="flex items-center justify-between bg-amber-50 border-b border-amber-200 px-4 py-2">
+          <span className="text-[11px] font-semibold text-amber-700">รางวัลนำจับ</span>
+          <span className="text-[13px] font-bold text-amber-600">
+            ฿{report.compensationAmount?.toLocaleString('th-TH')}
           </span>
         </div>
-
-        {/* Urgent Badge */}
-        {report.urgent && (
-          <div className="absolute top-3 right-3">
-            <span className="inline-flex items-center gap-1 rounded-full bg-orange-500 text-white px-2.5 py-1 text-[10px] font-semibold shadow-sm" title="รายงานด่วน ต้องการความช่วยเหลือเร่งด่วน">
-              <AlertTriangle className="h-2.5 w-2.5" />
-              ด่วน
-            </span>
-          </div>
-        )}
-
-        {/* Species Badge - Bottom Left */}
-        {report.category && (
-          <div className="absolute bottom-3 left-3">
-            <span className="inline-flex items-center rounded-full bg-white/95 text-slate-600 border border-slate-200 px-2.5 py-1 text-[10px] font-medium backdrop-blur-sm">
-              {report.category}
-            </span>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Content Section */}
       <div className="flex flex-1 flex-col p-4 gap-3">
+
+        {/* Badges Row */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {/* Status */}
+          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+            <span className={`h-2 w-2 rounded-full ${isLost ? 'bg-orange-500' : 'bg-slate-400'}`} />
+            {isLost ? 'สัตว์หาย' : 'พบสัตว์'}
+          </span>
+
+          {/* Category */}
+          {report.category && (
+            <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-500 border border-slate-200 px-2.5 py-1 text-[11px] font-medium">
+              {report.category}
+            </span>
+          )}
+
+          {/* Urgent */}
+          {report.urgent && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-orange-500 text-white px-2.5 py-1 text-[10px] font-semibold">
+              <AlertTriangle className="h-2.5 w-2.5" />
+              ด่วน
+            </span>
+          )}
+        </div>
+
         {/* Title */}
         <h3 className="font-semibold text-slate-800 text-sm leading-snug line-clamp-2 group-hover:text-orange-600 transition-colors">
           {report.title}
@@ -145,44 +152,30 @@ const AnimalCard = ({ report }: { report: Report & { likedBy?: string[]; realCom
         {/* Divider */}
         <div className="my-auto border-t border-slate-100" />
 
-        {/* Footer with Stats + Subtle Comment Button */}
+        {/* Footer */}
         <div className="flex items-center justify-between pt-1">
-          <span className="text-[10px] text-slate-400" title="เวลาที่รายงานถูกสร้างขึ้น">
+          <span className="text-[10px] text-slate-400">
             {timeAgo(report.createdAt)}
           </span>
-          
-          <div className="flex items-center gap-3">
-            {/* Views */}
-            <span className="flex items-center gap-1 text-[10px] text-slate-400" title="จำนวนครั้งที่เปิดดู">
-              <Eye className="h-3 w-3" />
-              {report.viewsCount || 0}
-            </span>
-            
-            {/* Likes */}
-            <span className="flex items-center gap-1 text-[10px] text-slate-400" title="จำนวนการกดถูกใจ">
-              <TrendingUp className="h-3 w-3" />
-              {report.likesCount || 0}
-            </span>
-            
-            {/* 💬 Subtle Comment Button - Only shows interaction on hover */}
-            <button
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                window.location.href = `/detail/${report.id}#comments`;
-              }}
-              className="flex items-center gap-1 text-[10px] text-slate-300 hover:text-orange-500 transition-colors cursor-pointer"
-              title="แสดงความคิดเห็น"
-              aria-label={`แสดงความคิดเห็น ${commentCount} รายการ`}
-            >
-              <MessageCircle className="h-3 w-3 group-hover:text-orange-500 transition-colors" />
-              <span className="group-hover:text-orange-500 transition-colors">{commentCount}</span>
-            </button>
-          </div>
+
+          {/* Comment Button */}
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              window.location.href = `/detail/${report.id}#comments`;
+            }}
+            className="flex items-center gap-1 text-[10px] text-slate-300 hover:text-orange-500 transition-colors cursor-pointer"
+            title="แสดงความคิดเห็น"
+            aria-label={`แสดงความคิดเห็น ${commentCount} รายการ`}
+          >
+            <MessageCircle className="h-3 w-3" />
+            <span>{commentCount}</span>
+          </button>
         </div>
       </div>
 
-      {/* Hover Indicator - Subtle */}
+      {/* Hover Indicator */}
       <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-2 group-hover:translate-x-0 pointer-events-none">
         <div className="rounded-full bg-white p-1.5 shadow-md border border-slate-100">
           <ArrowUpRight className="h-3.5 w-3.5 text-slate-300 group-hover:text-orange-400 transition-colors -rotate-45" />
@@ -297,30 +290,7 @@ export default function HomeFeedPage({ user }: HomeFeedPageProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const PAGE_SIZE = 20;
 
-  // ── realtime first page with comment counts ─────────────────────────────
-  useEffect(() => {
-    setLoading(true);
-    const q = query(collection(db, 'reports'), orderBy('createdAt', 'desc'), limit(PAGE_SIZE));
-    const unsub = onSnapshot(q, async (snap) => {
-      let data = snap.docs.map(mapDoc);
-      
-      // Fetch real comment counts for these reports
-      if (data.length > 0) {
-        const counts = await fetchCommentCounts(data.map(r => r.id));
-        data = data.map(r => ({ ...r, realCommentCount: counts[r.id] }));
-      }
-      
-      setReports(data.length > 0 ? data : (sampleReports as any));
-      setLastVisible(snap.docs[snap.docs.length - 1] ?? null);
-      setHasMore(snap.docs.length >= PAGE_SIZE);
-      setLoading(false);
-    }, (err) => {
-      console.warn('feed error', err);
-      setReports(sampleReports as any);
-      setLoading(false);
-    });
-    return () => unsub();
-  }, []);
+  
 
   // ── load more with comment counts ────────────────────────────────────────
   const loadMore = async () => {

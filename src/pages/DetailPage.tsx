@@ -7,17 +7,14 @@ import {
   MessageCircle, Link2, Clock, Copy
 } from 'lucide-react';
 import { doc, getDoc, db } from '../firebase';
-import { sampleReports } from '../data';
-// ✅ แก้: ใช้ alias เพื่อหลีกเลี่ยงชื่อซ้ำกับ User อื่นๆ
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { Report } from '../types';
-import CommentsSection from './CommentsSection'; 
+import CommentsSection from './CommentsSection';
+
 interface DetailPageProps {
-  // ✅ ใช้ FirebaseUser แทน User เพื่อป้องกันชนกัน
   user: FirebaseUser | null;
 }
 
-// ─── helpers ────────────────────────────────────────────────────────────────
 function timeAgo(dateString: string): string {
   try {
     const diff = (Date.now() - new Date(dateString).getTime()) / 1000;
@@ -44,11 +41,9 @@ function formatDate(dateString?: string): string {
   }
 }
 
-// ─── Sub-Components ─────────────────────────────────────────────────────────
-
 const ImageGallery = ({ images, title }: { images?: string[]; title: string }) => {
   const [activeIndex, setActiveIndex] = useState(0);
-  
+
   if (!images || images.length === 0) {
     return (
       <div className="rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center py-16">
@@ -59,7 +54,6 @@ const ImageGallery = ({ images, title }: { images?: string[]; title: string }) =
 
   return (
     <div className="space-y-3">
-      {/* Main image: object-contain so the full image shows, no cropping */}
       <div className="rounded-2xl bg-slate-100 border border-slate-200 overflow-hidden flex items-center justify-center min-h-[200px]">
         <img
           src={images[activeIndex]}
@@ -74,8 +68,8 @@ const ImageGallery = ({ images, title }: { images?: string[]; title: string }) =
               key={idx}
               onClick={() => setActiveIndex(idx)}
               className={`shrink-0 h-16 w-16 rounded-xl border-2 overflow-hidden transition-all bg-slate-100 flex items-center justify-center ${
-                activeIndex === idx 
-                  ? 'border-orange-500 ring-2 ring-orange-100' 
+                activeIndex === idx
+                  ? 'border-orange-500 ring-2 ring-orange-100'
                   : 'border-slate-200 hover:border-slate-300'
               }`}
             >
@@ -88,16 +82,16 @@ const ImageGallery = ({ images, title }: { images?: string[]; title: string }) =
   );
 };
 
-const DetailRow = ({ 
-  icon: Icon, 
-  label, 
-  value, 
+const DetailRow = ({
+  icon: Icon,
+  label,
+  value,
   tooltip,
-  highlight = false 
-}: { 
-  icon: React.ElementType; 
-  label: string; 
-  value: React.ReactNode; 
+  highlight = false
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: React.ReactNode;
   tooltip?: string;
   highlight?: boolean;
 }) => {
@@ -117,15 +111,15 @@ const DetailRow = ({
   );
 };
 
-const AttributeCard = ({ 
-  icon: Icon, 
-  label, 
-  value, 
-  tooltip 
-}: { 
-  icon: React.ElementType; 
-  label: string; 
-  value: string; 
+const AttributeCard = ({
+  icon: Icon,
+  label,
+  value,
+  tooltip
+}: {
+  icon: React.ElementType;
+  label: string;
+  value: string;
   tooltip?: string;
 }) => (
   <div className="rounded-xl bg-slate-50 border border-slate-200 p-4" title={tooltip}>
@@ -137,16 +131,16 @@ const AttributeCard = ({
   </div>
 );
 
-const ContactLink = ({ 
-  icon: Icon, 
-  label, 
-  href, 
+const ContactLink = ({
+  icon: Icon,
+  label,
+  href,
   value,
   color = 'slate'
-}: { 
-  icon: React.ElementType; 
-  label: string; 
-  href?: string; 
+}: {
+  icon: React.ElementType;
+  label: string;
+  href?: string;
   value: string;
   color?: 'slate' | 'blue' | 'green';
 }) => {
@@ -190,8 +184,6 @@ const StatBadge = ({ icon: Icon, label, value }: { icon: React.ElementType; labe
   </div>
 );
 
-// ─── Main Component ─────────────────────────────────────────────────────────
-
 export default function DetailPage({ user }: DetailPageProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -212,12 +204,10 @@ export default function DetailPage({ user }: DetailPageProps) {
             createdAt: data.createdAt?.toDate?.()?.toISOString?.() || data.createdAt || new Date().toISOString(),
           } as Report);
         } else {
-          const sample = sampleReports.find(r => r.id === id);
-          setReport((sample || sampleReports[0]) as Report);
+          setReport(null);
         }
-      } catch (err) {
-        const sample = sampleReports.find(r => r.id === id);
-        setReport((sample || sampleReports[0]) as Report);
+      } catch {
+        setReport(null);
       } finally {
         setLoading(false);
       }
@@ -278,14 +268,11 @@ export default function DetailPage({ user }: DetailPageProps) {
 
   return (
     <div className="space-y-6">
-      
-      {/* ── Header Section ───────────────────────────────────────────────── */}
+
+      {/* ── Header Section ── */}
       <header className="rounded-2xl bg-white border border-slate-200 p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-          
-          {/* Left: Title & Meta */}
           <div className="flex-1 min-w-0 space-y-3">
-            {/* Back Button + Urgent Badge */}
             <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={() => navigate(-1)}
@@ -294,48 +281,40 @@ export default function DetailPage({ user }: DetailPageProps) {
                 <ChevronLeft className="h-4 w-4" />
                 ย้อนกลับ
               </button>
-              
               {report.urgent && (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-500 text-white px-3 py-1.5 text-xs font-semibold" title="รายงานนี้ต้องการความช่วยเหลือเร่งด่วน">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-500 text-white px-3 py-1.5 text-xs font-semibold">
                   <AlertTriangle className="h-3.5 w-3.5" />
                   ด่วน
                 </span>
               )}
-              
-              {/* Type Badge */}
               <span className={`inline-flex items-center rounded-full px-3 py-1.5 text-xs font-semibold border ${
-                isLost 
-                  ? 'bg-orange-50 text-orange-700 border-orange-200' 
-                  : 'bg-slate-50 text-slate-600 border-slate-200'
+                isLost ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-slate-50 text-slate-600 border-slate-200'
               }`}>
                 {isLost ? 'สัตว์หาย' : 'พบสัตว์'}
               </span>
             </div>
 
-            {/* Title */}
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 leading-tight">
               {report.title}
             </h1>
 
-            {/* Meta Info */}
             <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-500">
-              <span className="inline-flex items-center gap-1.5" title="จังหวัดที่พบหรือหาย">
+              <span className="inline-flex items-center gap-1.5">
                 <MapPin className="h-4 w-4 text-orange-500" />
                 {[report.district, report.province].filter(Boolean).join(', ') || 'ไม่ระบุ'}
               </span>
               <span className="hidden sm:inline text-slate-200">•</span>
-              <span className="inline-flex items-center gap-1.5" title="หมวดหมู่สัตว์เลี้ยง">
+              <span className="inline-flex items-center gap-1.5">
                 <Tag className="h-4 w-4" />
                 {report.category || 'ไม่ระบุ'}
               </span>
               <span className="hidden sm:inline text-slate-200">•</span>
-              <span className="inline-flex items-center gap-1.5" title="เวลาที่รายงานถูกสร้าง">
+              <span className="inline-flex items-center gap-1.5">
                 <Clock className="h-4 w-4" />
                 {timeAgo(report.createdAt)}
               </span>
             </div>
 
-            {/* Stats */}
             <div className="flex items-center gap-4 pt-1">
               <StatBadge icon={Eye} label="จำนวนการดู" value={report.viewsCount || 0} />
               <StatBadge icon={Heart} label="จำนวนถูกใจ" value={report.likesCount || 0} />
@@ -344,13 +323,11 @@ export default function DetailPage({ user }: DetailPageProps) {
             </div>
           </div>
 
-          {/* Right: Action Buttons */}
           <div className="flex flex-wrap gap-2">
             {report.contactPhone && (
               <a
                 href={`tel:${report.contactPhone.replace(/[^\d+]/g, '')}`}
                 className="inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white hover:bg-orange-600 transition"
-                title="โทรหาผู้แจ้งรายงาน"
               >
                 <Phone className="h-4 w-4" />
                 ติดต่อ
@@ -359,7 +336,6 @@ export default function DetailPage({ user }: DetailPageProps) {
             <button
               onClick={handleShare}
               className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:border-orange-300 hover:text-orange-600 transition"
-              title={copied ? 'คัดลอกแล้ว' : 'คัดลอกลิงก์เพื่อแชร์'}
             >
               {copied ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Share2 className="h-4 w-4" />}
               {copied ? 'คัดลอกแล้ว' : 'แชร์'}
@@ -368,172 +344,82 @@ export default function DetailPage({ user }: DetailPageProps) {
         </div>
       </header>
 
-      {/* ── Main Content Grid ───────────────────────────────────────────── */}
+      {/* ── Main Content Grid ── */}
       <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-        
-        {/* Left Column: Images + Details */}
+
+        {/* Left Column */}
         <div className="space-y-6">
-          
-          {/* Image Gallery */}
           <section className="rounded-2xl bg-white border border-slate-200 p-5">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">รูปภาพ</h2>
             <ImageGallery images={report.images} title={report.title} />
           </section>
 
-          {/* Description */}
           <section className="rounded-2xl bg-white border border-slate-200 p-5">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">รายละเอียด</h2>
-            <div className="prose prose-slate max-w-none text-sm text-slate-700 leading-relaxed">
-              <p className="whitespace-pre-wrap">{report.description || 'ไม่มีรายละเอียดเพิ่มเติม'}</p>
-            </div>
+            <p className="whitespace-pre-wrap text-sm text-slate-700 leading-relaxed">
+              {report.description || 'ไม่มีรายละเอียดเพิ่มเติม'}
+            </p>
           </section>
 
-          {/* Attributes Grid */}
           {hasAttributes && (
             <section className="rounded-2xl bg-white border border-slate-200 p-5">
               <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">ลักษณะสัตว์เลี้ยง</h2>
               <div className="grid gap-3 sm:grid-cols-2">
-                {report.color && (
-                  <AttributeCard 
-                    icon={Palette} 
-                    label="สี" 
-                    value={report.color} 
-                    tooltip="สีหลักของสัตว์เลี้ยง"
-                  />
-                )}
-                {(report.brand || report.model) && (
-                  <AttributeCard 
-                    icon={Tag} 
-                    label="ยี่ห้อ / รุ่น" 
-                    value={[report.brand, report.model].filter(Boolean).join(' / ')} 
-                    tooltip="ยี่ห้อหรือรุ่นของปลอกคอ/อุปกรณ์"
-                  />
-                )}
-                {report.breed && (
-                  <AttributeCard 
-                    icon={MapPin} 
-                    label="สายพันธุ์" 
-                    value={report.breed} 
-                    tooltip="สายพันธุ์ของสัตว์เลี้ยง"
-                  />
-                )}
-                {report.size && (
-                  <AttributeCard 
-                    icon={Ruler} 
-                    label="ขนาด" 
-                    value={report.size} 
-                    tooltip="ขนาดโดยประมาณของสัตว์เลี้ยง"
-                  />
-                )}
+                {report.color && <AttributeCard icon={Palette} label="สี" value={report.color} tooltip="สีหลักของสัตว์เลี้ยง" />}
+                {(report.brand || report.model) && <AttributeCard icon={Tag} label="ยี่ห้อ / รุ่น" value={[report.brand, report.model].filter(Boolean).join(' / ')} tooltip="ยี่ห้อหรือรุ่นของปลอกคอ/อุปกรณ์" />}
+                {report.breed && <AttributeCard icon={MapPin} label="สายพันธุ์" value={report.breed} tooltip="สายพันธุ์ของสัตว์เลี้ยง" />}
+                {report.size && <AttributeCard icon={Ruler} label="ขนาด" value={report.size} tooltip="ขนาดโดยประมาณของสัตว์เลี้ยง" />}
               </div>
             </section>
           )}
 
-          {/* Date & Location Details */}
           <section className="rounded-2xl bg-white border border-slate-200 p-5">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">เวลาและสถานที่</h2>
             <div className="space-y-1">
-              <DetailRow 
-                icon={Calendar} 
-                label="วันที่" 
-                value={formatDate(report.date)} 
-                tooltip="วันที่ที่สัตว์เลี้ยงหายหรือถูกพบ"
-              />
-              <DetailRow 
-                icon={Clock} 
-                label="เวลา" 
-                value={report.time} 
-                tooltip="เวลาโดยประมาณของเหตุการณ์"
-              />
-              <DetailRow 
-                icon={MapPin} 
-                label="สถานที่" 
-                value={[report.address, report.district, report.province].filter(Boolean).join(', ') || 'ไม่ระบุ'} 
-                tooltip="สถานที่ที่สัตว์เลี้ยงหายหรือถูกพบ"
-                highlight
-              />
+              <DetailRow icon={Calendar} label="วันที่" value={formatDate(report.date)} tooltip="วันที่ที่สัตว์เลี้ยงหายหรือถูกพบ" />
+              <DetailRow icon={Clock} label="เวลา" value={report.time} tooltip="เวลาโดยประมาณของเหตุการณ์" />
+              <DetailRow icon={MapPin} label="สถานที่" value={[report.address, report.district, report.province].filter(Boolean).join(', ') || 'ไม่ระบุ'} tooltip="สถานที่ที่สัตว์เลี้ยงหายหรือถูกพบ" highlight />
               {report.lat && report.lng && (
-                <DetailRow 
-                  icon={MapPin} 
-                  label="พิกัด" 
-                  value={`${report.lat.toFixed(5)}, ${report.lng.toFixed(5)}`} 
-                  tooltip="พิกัดละติจูดและลองจิจูด"
-                />
+                <DetailRow icon={MapPin} label="พิกัด" value={`${report.lat.toFixed(5)}, ${report.lng.toFixed(5)}`} tooltip="พิกัดละติจูดและลองจิจูด" />
               )}
             </div>
           </section>
 
-          {/* Tags */}
           {report.tags && report.tags.length > 0 && (
             <section className="rounded-2xl bg-white border border-slate-200 p-5">
               <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">แท็ก</h2>
               <div className="flex flex-wrap gap-2">
                 {report.tags.map((tag, idx) => (
-                  <span 
-                    key={idx}
-                    className="inline-flex items-center rounded-full bg-slate-50 border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600"
-                  >
+                  <span key={idx} className="inline-flex items-center rounded-full bg-slate-50 border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600">
                     #{tag}
                   </span>
                 ))}
               </div>
             </section>
           )}
-
         </div>
 
-        {/* Right Column: Contact + Map + Reward */}
+        {/* Right Column */}
         <div className="space-y-6">
-          
-          {/* Contact Information */}
           {hasContact && (
             <section className="rounded-2xl bg-white border border-slate-200 p-5">
               <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">ช่องทางการติดต่อ</h2>
               <div className="space-y-3">
-                {report.contactPhone && (
-                  <ContactLink
-                    icon={Phone}
-                    label="เบอร์โทรศัพท์"
-                    href={`tel:${report.contactPhone.replace(/[^\d+]/g, '')}`}
-                    value={report.contactPhone}
-                    color="blue"
-                  />
-                )}
-                {report.contactLine && (
-                  <ContactLink
-                    icon={MessageSquare}
-                    label="LINE"
-                    href={`https://line.me/ti/p/${report.contactLine.replace('@', '')}`}
-                    value={report.contactLine}
-                    color="green"
-                  />
-                )}
-                {report.contactFacebook && (
-                  <ContactLink
-                    icon={Facebook}
-                    label="Facebook"
-                    href={report.contactFacebook.startsWith('http') ? report.contactFacebook : `https://facebook.com/${report.contactFacebook}`}
-                    value={report.contactFacebook.replace('https://facebook.com/', '').replace('www.facebook.com/', '')}
-                    color="blue"
-                  />
-                )}
+                {report.contactPhone && <ContactLink icon={Phone} label="เบอร์โทรศัพท์" href={`tel:${report.contactPhone.replace(/[^\d+]/g, '')}`} value={report.contactPhone} color="blue" />}
+                {report.contactLine && <ContactLink icon={MessageSquare} label="LINE" href={`https://line.me/ti/p/${report.contactLine.replace('@', '')}`} value={report.contactLine} color="green" />}
+                {report.contactFacebook && <ContactLink icon={Facebook} label="Facebook" href={report.contactFacebook.startsWith('http') ? report.contactFacebook : `https://facebook.com/${report.contactFacebook}`} value={report.contactFacebook.replace('https://facebook.com/', '').replace('www.facebook.com/', '')} color="blue" />}
               </div>
             </section>
           )}
 
-          {/* Map Preview */}
           <section className="rounded-2xl bg-white border border-slate-200 p-5">
             <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">ตำแหน่งบนแผนที่</h2>
             <div className="aspect-video rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center">
               {report.lat && report.lng ? (
                 <div className="text-center p-4">
                   <MapPin className="h-8 w-8 text-orange-500 mx-auto mb-2" />
-                  <p className="text-sm text-slate-600">
-                    {[report.district, report.province].filter(Boolean).join(', ') || 'ไม่ระบุตำแหน่ง'}
-                  </p>
-                  <p className="mt-1 text-xs text-slate-400 font-mono">
-                    {report.lat.toFixed(5)}, {report.lng.toFixed(5)}
-                  </p>
+                  <p className="text-sm text-slate-600">{[report.district, report.province].filter(Boolean).join(', ') || 'ไม่ระบุตำแหน่ง'}</p>
+                  <p className="mt-1 text-xs text-slate-400 font-mono">{report.lat.toFixed(5)}, {report.lng.toFixed(5)}</p>
                 </div>
               ) : (
                 <div className="text-center p-4 text-slate-400">
@@ -543,19 +429,13 @@ export default function DetailPage({ user }: DetailPageProps) {
               )}
             </div>
             {report.lat && report.lng && (
-              <a
-                href={`https://www.google.com/maps?q=${report.lat},${report.lng}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-3 inline-flex items-center gap-2 text-xs font-medium text-orange-600 hover:text-orange-700"
-              >
+              <a href={`https://www.google.com/maps?q=${report.lat},${report.lng}`} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-2 text-xs font-medium text-orange-600 hover:text-orange-700">
                 <Link2 className="h-3.5 w-3.5" />
                 เปิดใน Google Maps
               </a>
             )}
           </section>
 
-          {/* Reward */}
           {report.reward && (
             <section className="rounded-2xl bg-orange-50 border border-orange-200 p-5">
               <div className="flex items-center gap-2 text-orange-700 mb-3">
@@ -563,13 +443,10 @@ export default function DetailPage({ user }: DetailPageProps) {
                 <h2 className="text-sm font-semibold uppercase tracking-wide">รางวัลนำจับ</h2>
               </div>
               <p className="text-2xl font-bold text-orange-900">{report.reward}</p>
-              <p className="mt-2 text-xs text-orange-600/80">
-                * รางวัลสำหรับผู้ที่มีข้อมูลหรือช่วยเหลือในการตามหา
-              </p>
+              <p className="mt-2 text-xs text-orange-600/80">* รางวัลสำหรับผู้ที่มีข้อมูลหรือช่วยเหลือในการตามหา</p>
             </section>
           )}
 
-          {/* Reporter Info */}
           {report.user && (
             <section className="rounded-2xl bg-white border border-slate-200 p-5">
               <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">ผู้แจ้งรายงาน</h2>
@@ -581,14 +458,11 @@ export default function DetailPage({ user }: DetailPageProps) {
                     <MessageCircle className="h-5 w-5 text-slate-400" />
                   )}
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">{report.user.name || 'ไม่ระบุชื่อ'}</p>
-                </div>
+                <p className="text-sm font-semibold text-slate-800">{report.user.name || 'ไม่ระบุชื่อ'}</p>
               </div>
             </section>
           )}
 
-          {/* Help Tips */}
           <section className="rounded-2xl bg-slate-50 border border-slate-200 p-5">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">คำแนะนำ</h2>
             <ul className="space-y-2 text-sm text-slate-600">
@@ -606,14 +480,13 @@ export default function DetailPage({ user }: DetailPageProps) {
               </li>
             </ul>
           </section>
-
         </div>
       </div>
 
-      {/* ── Comments Section ─────────────────────────────── */}
+      {/* ── Comments Section ── */}
       <CommentsSection reportId={report.id} user={user} />
 
-      {/* ── Fixed Bottom Bar (Mobile) ─────────────────────────────────── */}
+      {/* ── Fixed Bottom Bar (Mobile) ── */}
       {report.contactPhone && (
         <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white p-4 sm:hidden">
           <div className="mx-auto flex max-w-6xl gap-3">
@@ -634,7 +507,6 @@ export default function DetailPage({ user }: DetailPageProps) {
           </div>
         </div>
       )}
-
     </div>
   );
 }
