@@ -83,13 +83,15 @@ const AnimalCard = ({ report }: { report: Report & { likedBy?: string[]; realCom
       {/* Image Section — ไม่มี badge ทับรูปเลย */}
       <div className="relative h-40 bg-slate-50 overflow-hidden">
         {hasImage ? (
-          <img
-            src={report.images![0]}
-            alt={report.title}
-            className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500"
-            loading="lazy"
-            onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/400x300/f8fafc/cbd5e1?text=No+Image'; }}
-          />
+         <img
+  src={report.images![0]}
+  alt={report.title}
+  crossOrigin="anonymous"
+  referrerPolicy="no-referrer"
+  className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500"
+  loading="lazy"
+  onError={(e) => { (e.target as HTMLImageElement).src = 'https://placehold.co/400x300/f8fafc/cbd5e1?text=No+Image'; }}
+/>
         ) : (
           <div className="h-full w-full flex items-center justify-center">
             <PawPrint className="h-10 w-10 text-slate-300" />
@@ -290,7 +292,34 @@ export default function HomeFeedPage({ user }: HomeFeedPageProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const PAGE_SIZE = 20;
 
-  
+  useEffect(() => {
+  setLoading(true);
+  const q = query(
+    collection(db, 'reports'),
+    orderBy('createdAt', 'desc'),
+    limit(PAGE_SIZE)
+  );
+
+  const unsub = onSnapshot(q, async (snap) => {
+    let data = snap.docs.map(mapDoc);
+
+    // fetch real comment counts
+    if (data.length > 0) {
+      const counts = await fetchCommentCounts(data.map(r => r.id));
+      data = data.map(r => ({ ...r, realCommentCount: counts[r.id] }));
+    }
+
+    setReports(data);
+    setLastVisible(snap.docs[snap.docs.length - 1] ?? null);
+    setHasMore(snap.docs.length >= PAGE_SIZE);
+    setLoading(false);
+  }, (err) => {
+    console.error('onSnapshot error', err);
+    setLoading(false);
+  });
+
+  return () => unsub();
+}, []);
 
   // ── load more with comment counts ────────────────────────────────────────
   const loadMore = async () => {

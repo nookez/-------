@@ -931,18 +931,7 @@ export default function LandingPage({ user }: LandingPageProps) {
         </div>
       </footer>
 
-      {/* ✅ Floating "Create Post" Button (Mobile) */}
-      {user && (
-        <Link
-          to="/report/lost"
-          className="fixed bottom-6 right-6 z-50 sm:hidden flex items-center justify-center h-14 w-14 rounded-full bg-orange-500 text-white shadow-lg hover:bg-orange-600 active:scale-95 transition-all"
-          aria-label="แจ้งสัตว์เลี้ยงหาย"
-        >
-          <Plus className="h-6 w-6" />
-        </Link>
-      )}
-
-      {/* ✅ Scroll to Top Button */}
+     {/* ✅ Scroll to Top — desktop เท่านั้น */}
       <button
         onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
         className="fixed bottom-6 left-6 z-40 hidden sm:flex items-center justify-center h-10 w-10 rounded-full bg-white border border-slate-200 text-slate-500 shadow-sm hover:border-orange-300 hover:text-orange-500 transition"
@@ -951,7 +940,7 @@ export default function LandingPage({ user }: LandingPageProps) {
         <ArrowUp className="h-4 w-4" />
       </button>
 
-      {/* ✅ Scroll to Latest Posts Button */}
+      {/* ✅ Scroll to Posts — desktop เท่านั้น */}
       <button
         onClick={() => document.querySelector('section:nth-of-type(5)')?.scrollIntoView({ behavior: 'smooth' })}
         className="fixed bottom-6 right-6 z-40 hidden sm:flex items-center justify-center h-10 w-10 rounded-full bg-white border border-slate-200 text-slate-500 shadow-sm hover:border-orange-300 hover:text-orange-500 transition"
